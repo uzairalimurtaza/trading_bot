@@ -5,15 +5,22 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
+    "start": "nodemon --max-old-space-size=1024  server.js --ext js",
+    "dev": "nodemon",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "bcrypt": "^5.1.1",
+    "bcryptjs": "^3.0.2",
     "body-parser": "^1.20.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express.js": "^1.0.0",
-    "mongoose": "^8.12.1"
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.12.1",
+    "nodemailer": "^6.10.0",
+    "speakeasy": "^2.0.0"
   }
 }
