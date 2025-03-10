@@ -28,6 +28,11 @@ export const auth = async (req, res, next) => {
       error.statusCode = 401;
       return next(error);
     }
+    if (!user.isVerified) {
+      const error = new Error("User not verified");
+      error.statusCode = 401;
+      return next(error);
+    }
 
     req.user = user;
     next();

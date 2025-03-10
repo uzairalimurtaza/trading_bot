@@ -58,6 +58,10 @@ const User = new mongoose.Schema(
       type: Number,
       required: false,
     },
+    is2Factor: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );
