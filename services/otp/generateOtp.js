@@ -1,9 +1,10 @@
+import { validateUser } from "../userValidation/verifyUser.js";
 import speakeasy from "speakeasy";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-export const generateOtp = async () => {
+export const generateOtp = () => {
   try {
     const secret = speakeasy.generateSecret({
       length: 20,
@@ -27,5 +28,28 @@ export const generateOtp = async () => {
   } catch (error) {
     console.error("Error generating OTP : ", error);
     return { success: false, success: false };
+  }
+};
+
+export const validateOtp = async (email, otp, isLogin) => {
+  try {
+    const { success, message, user } = await validateUser(email, isLogin);
+    if (!success) {
+      return res.status(400).json({ success: false, message });
+    }
+
+    if (user.otp !== otp) {
+      return { success: false, message: "Invalid OTP" };
+    }
+
+    const currentTime = Math.floor(Date.now() / 1000); // Convert to seconds
+    if (user.otpExpiry < currentTime) {
+      return { success: false, message: "OTP is Expired" };
+    }
+
+    return { success: true, user };
+  } catch (error) {
+    console.error("Error in validateOtp:", error);
+    return { success: false, message: "Internal Server Error" };
   }
 };
