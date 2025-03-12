@@ -321,13 +321,13 @@ export const verifyForgotPasswordOTP = async (req, res) => {
   }
 };
 export const resetPassword = async (req, res) => {
-  const { access_token, oldPassword, newPassword } = req.body;
-  if (!(access_token && oldPassword && newPassword)) {
+  const { access_token, newPassword } = req.body;
+  if (!(access_token && newPassword)) {
     console.log("Invalid Input");
     return res.status(400).json({
       status: false,
       message:
-        "Please ensure that you have send all the required fields ( access_token, oldPassword, newPassword )",
+        "Please ensure that you have send all the required fields ( access_token, newPassword )",
     });
   }
   try {
@@ -338,20 +338,18 @@ export const resetPassword = async (req, res) => {
     let userRecord = await UserModel.findById({ _id: decoded.id }).select(
       "+password"
     );
+    if (!userRecord) {
+      return res.status(400).json({
+        status: false,
+        message: "User not found",
+      });
+    }
     const { success, message, user } = await validateUser(
       userRecord.email,
       false
     );
     if (!success) {
       return res.status(400).json({ status: false, message });
-    }
-
-    const isMatch = await userRecord.comparePassword(oldPassword);
-    if (!isMatch) {
-      return res.status(400).json({
-        status: false,
-        message: "Incorrect Password",
-      });
     }
     userRecord.password = newPassword;
     await userRecord.save();
@@ -442,7 +440,6 @@ export const verify2FAOTP = async (req, res) => {
     });
   }
 };
-
 export const onOFF2Factor = async (req, res) => {
   const { type } = req.body;
   if (!type) {
