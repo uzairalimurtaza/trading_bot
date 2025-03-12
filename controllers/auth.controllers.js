@@ -367,36 +367,6 @@ export const resetPassword = async (req, res) => {
     });
   }
 };
-export const onOFF2Factor = async (req, res) => {
-  const { type } = req.body;
-  if (!type) {
-    console.log("Invalid Input");
-    return res.status(400).json({
-      status: false,
-      message: `Please ensure that you have send all the required fields ( type )`,
-    });
-  }
-  try {
-    let user = await UserModel.findOne({ email: req.user.email });
-    if (type == "true") {
-      user.is2Factor = true;
-    } else {
-      user.is2Factor = false;
-    }
-    await user.save();
-    return res.status(200).json({
-      status: true,
-      message: "2FA updated successfully",
-      user,
-    });
-  } catch (error) {
-    console.log("Error : ", error);
-    return res.status(500).json({
-      status: false,
-      msg: "Internal server error",
-    });
-  }
-};
 export const resend2FAOTP = async (req, res) => {
   const { email } = req.body;
   if (!email) {
@@ -469,6 +439,120 @@ export const verify2FAOTP = async (req, res) => {
       success: false,
       msg: "OTP verification error ",
       error,
+    });
+  }
+};
+
+export const onOFF2Factor = async (req, res) => {
+  const { type } = req.body;
+  if (!type) {
+    console.log("Invalid Input");
+    return res.status(400).json({
+      status: false,
+      message: `Please ensure that you have send all the required fields ( type )`,
+    });
+  }
+  try {
+    if (type == "true") {
+      const { otp, otpExpiry, success } = generateOtp();
+      if (!success) {
+        return res.status(400).json({
+          status: false,
+          message: "Error while generating OTP",
+        });
+      }
+      req.user.otp = otp;
+      req.user.otpExpiry = otpExpiry;
+      await req.user.save();
+
+      sendOtpEmail(
+        req.user.email,
+        otp,
+        "Your Two-Factor Authentication Verification Code"
+      );
+      return res.status(200).json({
+        status: true,
+        message: "Check your email for OTP.",
+      });
+    } else {
+      req.user.is2Factor = false;
+      await req.user.save();
+      return res.status(200).json({
+        status: true,
+        message: "2FA disabled successfully",
+        user: req.user,
+      });
+    }
+  } catch (error) {
+    console.log("Error : ", error);
+    return res.status(500).json({
+      status: false,
+      msg: "Internal server error",
+    });
+  }
+};
+export const resend2FAOTPProfile = async (req, res) => {
+  try {
+    const { otp, otpExpiry, success } = generateOtp();
+    if (!success) {
+      return res.status(400).json({
+        status: false,
+        message: "Error while generating OTP",
+      });
+    }
+    req.user.otp = otp;
+    req.user.otpExpiry = otpExpiry;
+    await req.user.save();
+
+    sendOtpEmail(
+      req.user.email,
+      otp,
+      "Your Two-Factor Authentication Verification Code"
+    );
+    return res.status(200).json({
+      status: true,
+      message: "Check your email for OTP.",
+    });
+  } catch (error) {
+    console.log("Error : ", error);
+    return res.status(500).json({
+      status: false,
+      message: error,
+    });
+  }
+};
+export const verify2FAOTPProfile = async (req, res) => {
+  const { otp } = req.body;
+  if (!otp) {
+    return res.status(400).json({
+      status: false,
+      message:
+        "Please ensure you are sending all the required fields in the request body (otp)",
+    });
+  }
+  try {
+    const { success, message, user } = await validateOtp(
+      req.user.email,
+      otp,
+      false
+    );
+    if (!success) {
+      return res.status(400).json({ status: false, message });
+    }
+    user.otp = "";
+    user.otpExpiry = "";
+    user.is2Factor = true;
+    await user?.save();
+    return res.status(200).json({
+      status: true,
+      message: "2FA enabled successfully",
+      user: user,
+    });
+  } catch (error) {
+    console.log("Error : ", error);
+    return res.status(500).json({
+      status: false,
+      message: error,
     });
   }
 };
