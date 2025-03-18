@@ -2,7 +2,7 @@ import {
   getConfirmation,
   parseTransaction,
 } from "../services/blockchain/transactions.js";
-import Transaction from "../models/transaction.model.js";
+import Transaction from "../models/transactions.model.js";
 
 import { Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
 
@@ -60,6 +60,7 @@ export const confirmTransaction = async (req, res) => {
     });
 
     await txRecord.save();
+    console.log("Transaction confirmed successfully.");
 
     return res.status(200).json({
       status: true,

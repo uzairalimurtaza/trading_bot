@@ -60,7 +60,11 @@ export const signUpUser = async (req, res) => {
     await user.save();
 
     // ----------------------------------------------------------------
-    sendOtpEmail(_email, otp, "Your Login Verification Code");
+    sendOtpEmail(
+      _email,
+      otp,
+      "Email Verification Code for Trading Bot Registration"
+    );
 
     return res.status(200).json({
       status: true,
@@ -99,7 +103,11 @@ export const resendOTP = async (req, res) => {
     user.otpExpiry = response.otpExpiry;
     await user.save();
 
-    sendOtpEmail(email, response.otp, "Your Login Verification Code");
+    sendOtpEmail(
+      email,
+      response.otp,
+      "Email Verification Code for Trading Bot Registration"
+    );
 
     return res.status(200).json({
       status: true,
@@ -182,7 +190,11 @@ export const loginUser = async (req, res) => {
       userRecord.otp = otp;
       userRecord.otpExpiry = otpExpiry;
       await userRecord.save();
-      sendOtpEmail(_email, otp, "Your OTP for Two-Factor Authentication.");
+      sendOtpEmail(
+        _email,
+        otp,
+        "Email Verification Code for Trading Bot Login"
+      );
 
       return res.status(200).json({
         status: true,
@@ -236,7 +248,7 @@ export const forgotPassword = async (req, res) => {
     sendOtpEmail(
       user.email,
       response.otp,
-      "Your Reset Password Verification Code"
+      "Password Reset Code for Trading Bot"
     );
 
     const token = user.getToken();
@@ -277,7 +289,7 @@ export const resendForgotPasswordOTP = async (req, res) => {
     user.otp = response.otp;
     user.otpExpiry = response.otpExpiry;
     await user.save();
-    sendOtpEmail(email, response.otp, "Your Reset Password Verification Code");
+    sendOtpEmail(email, response.otp, "Password Reset Code for Trading Bot");
 
     return res.status(200).json({
       status: true,
@@ -389,7 +401,11 @@ export const resend2FAOTP = async (req, res) => {
     user.otp = response.otp;
     user.otpExpiry = response.otpExpiry;
     await user.save();
-    sendOtpEmail(email, response.otp, "Your OTP for Two-Factor Authentication");
+    sendOtpEmail(
+      email,
+      response.otp,
+      "Email Verification Code for Trading Bot Login"
+    );
     return res.status(200).json({
       status: true,
       message: "Check your email for OTP.",
@@ -465,7 +481,7 @@ export const onOFF2Factor = async (req, res) => {
       sendOtpEmail(
         req.user.email,
         otp,
-        "Your Two-Factor Authentication Verification Code"
+        "Two-Factor Authentication Code for Trading Bot"
       );
       return res.status(200).json({
         status: true,
@@ -504,7 +520,7 @@ export const resend2FAOTPProfile = async (req, res) => {
     sendOtpEmail(
       req.user.email,
       otp,
-      "Your Two-Factor Authentication Verification Code"
+      "Two-Factor Authentication Code for Trading Bot"
     );
     return res.status(200).json({
       status: true,
