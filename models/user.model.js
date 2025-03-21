@@ -62,6 +62,26 @@ const User = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Stripe-related fields
+    stripeCustomerId: {
+      type: String,
+      default: null,
+    },
+    paymentMethods: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
+    defaultPaymentMethod: {
+      type: String,
+      default: null,
+    },
+    billingAddress: {
+      street: { type: String, default: null },
+      city: { type: String, default: null },
+      state: { type: String, default: null },
+      postalCode: { type: String, default: null },
+      country: { type: String, default: null },
+    },
   },
   { timestamps: true }
 );

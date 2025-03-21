@@ -10,6 +10,9 @@ mongoose.set("strictQuery", true);
 dotenv.config({ path: "./.env" });
 
 const app = express();
+
+app.post("/api/stripe/webhook", express.raw({ type: "application/json" }));
+
 app.use(express.json());
 app.use(bodyParser.json({ limit: "100mb" }));
 app.use(bodyParser.urlencoded({ limit: "100mb", extended: true }));
@@ -25,6 +28,8 @@ app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   next();
 });
+
+
 
 // routes
 app.use("/api", router);
