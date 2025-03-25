@@ -64,8 +64,8 @@ export const createCheckoutSession = async (req, res) => {
       shipping_address_collection: {
         allowed_countries: ["US", "CA"],
       },
-      success_url: `http://localhost:4003/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `http://localhost:4003/api/strip/cancel`,
+      success_url: `http://localhost:4005/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `http://localhost:4005/api/strip/cancel`,
     });
 
     console.log(session);
@@ -127,13 +127,47 @@ export const successCheckoutSession = async (req, res) => {
 
     const newPayment = await StripePayment.create(paymentData);
 
-    console.log("Payment successfully recorded:", newPayment);
+    // console.log("Payment successfully recorded:", newPayment);
 
-    res.status(200).json({
-      success: true,
-      message: "Payment successfully recorded",
-      payment: newPayment,
-    });
+    // res.status(200).json({
+    //   success: true,
+    //   message: "Payment successfully recorded",
+    //   payment: newPayment,
+    // });
+    res.send(`
+      <html>
+        <head>
+          <title>Payment Successful</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              text-align: center;
+              padding: 50px;
+            }
+            .container {
+              max-width: 500px;
+              margin: 0 auto;
+              padding: 20px;
+              box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+              border-radius: 10px;
+            }
+            h1 {
+              color: green;
+            }
+            p {
+              font-size: 18px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>🎉 Payment Successful!</h1>
+            <p>Thank you for your payment of <strong>$${paymentData.amount}</strong>!</p>
+            <p>Your transaction has been successfully recorded.</p>
+          </div>
+        </body>
+      </html>
+    `);
   } catch (error) {
     console.error("Error saving payment data:", error);
     res.status(500).json({

@@ -43,7 +43,7 @@ try {
 }
 
 // SERVER LISTENING
-const PORT = process.env.PORT || 4003;
+const PORT = process.env.PORT || 4005;
 app.listen(PORT, () => {
   console.log("Trading Bot server is running successfully on Port: " + PORT);
 });
