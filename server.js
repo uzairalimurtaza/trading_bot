@@ -11,42 +11,23 @@ dotenv.config({ path: "./.env" });
 
 const app = express();
 
-const allowedOrigins = [
-  "https://tradingbotapi.thecbt.live",
-  "http://localhost:3000",
-];
-
-const corsOptions = {
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
-  credentials: true,
-};
-
-app.use(cors(corsOptions));
-
-app.post("/api/stripe/webhook", express.raw({ type: "application/json" }));
+// app.post("/api/stripe/webhook", express.raw({ type: "application/json" }));
 
 app.use(express.json());
 app.use(bodyParser.json({ limit: "100mb" }));
 app.use(bodyParser.urlencoded({ limit: "100mb", extended: true }));
 // CORS setup
-// app.use(
-//   cors({
-//     origin: "*",
-//     credentials: true,
-//   })
-// );
+app.use(
+  cors({
+    origin: "*",
+    credentials: true,
+  })
+);
 // CORS SETUP
-// app.use((req, res, next) => {
-//   res.header("Access-Control-Allow-Origin", "*");
-//   next();
-// });
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  next();
+});
 
 // routes
 app.use("/api", router);
