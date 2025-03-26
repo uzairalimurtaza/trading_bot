@@ -44,15 +44,32 @@ export const createCustomer = async (req, res) => {
 
 export const createCheckoutSession = async (req, res) => {
   try {
+    const { plan } = req.body; 
+
+    if (!plan) {
+      return res.status(400).json({ error: "Plan is required" });
+    }
+
+    const plans = {
+      basic: { name: "Basic Plan", price: 1000 }, // $10
+      middle: { name: "Middle Plan", price: 3000 }, // $30
+      advanced: { name: "Advance Plan", price: 5000 }, // $50
+    };
+
+    if (!plans[plan]) {
+      return res.status(400).json({ error: "Invalid plan selected" });
+    }
+
+    const selectedPlan = plans[plan];
     const session = await stripe.checkout.sessions.create({
       line_items: [
         {
           price_data: {
             currency: "usd",
             product_data: {
-              name: "T-shirt",
+              name: selectedPlan.name,
             },
-            unit_amount: 5000,
+            unit_amount: selectedPlan.price,
           },
           quantity: 1,
         },
@@ -60,6 +77,7 @@ export const createCheckoutSession = async (req, res) => {
       mode: "payment",
       metadata: {
         userId: req.user.id, // ✅ Ensure this is included
+        plan: plan,
       },
       shipping_address_collection: {
         allowed_countries: ["US", "CA"],
