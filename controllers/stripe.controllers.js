@@ -44,7 +44,7 @@ export const createCustomer = async (req, res) => {
 
 export const createCheckoutSession = async (req, res) => {
   try {
-    const { plan } = req.body; 
+    const { plan } = req.body;
 
     if (!plan) {
       return res.status(400).json({ error: "Plan is required" });
@@ -52,8 +52,8 @@ export const createCheckoutSession = async (req, res) => {
 
     const plans = {
       basic: { name: "Basic Plan", price: 1000 }, // $10
-      middle: { name: "Middle Plan", price: 3000 }, // $30
-      advanced: { name: "Advance Plan", price: 5000 }, // $50
+      advanced: { name: "advanced Plan", price: 3000 }, // $30
+      Elite: { name: "Elite Plan", price: 5000 }, // $50
     };
 
     if (!plans[plan]) {
