@@ -82,6 +82,14 @@ const User = new mongoose.Schema(
       postalCode: { type: String, default: null },
       country: { type: String, default: null },
     },
+    walletKey: {
+      type: String,
+      default: null,
+      required: false,
+      // unique: true,
+      // sparse: true,
+      // index: { unique: true, sparse: true }
+    },
   },
   { timestamps: true }
 );
@@ -110,3 +118,6 @@ User.methods.comparePassword = async function (candidatePassword) {
 
 const UserModel = mongoose.model("User", User);
 export default UserModel;
+
+
+

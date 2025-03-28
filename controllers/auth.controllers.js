@@ -3,31 +3,26 @@ import { validateUser } from "../services/userValidation/verifyUser.js";
 import { sendOtpEmail } from "../services/email/sendEmail.js";
 import { generateOtp, validateOtp } from "../services/otp/generateOtp.js";
 import jwt from "jsonwebtoken";
+import { v4 as uuidv4 } from 'uuid';
 
 export const signUpUser = async (req, res) => {
   const { name, phoneNo, email, password } = req.body;
   if (!(name && phoneNo && email && password)) {
-    console.log("invalid Input");
     return res.status(400).json({
       status: false,
-      message: `Please ensure that you are sending all the required fields ( name, phoneNo, email, password )`,
+      message: "Please provide name, phone number, email, and password",
     });
   }
+
   try {
     const _email = email.toLowerCase();
-    console.log("user email : ", _email);
-
-    let user = await UserModel.findOne({
-      email: _email,
-    });
+    let user = await UserModel.findOne({ email: _email });
 
     if (user) {
-      console.log("user already exists");
       if (!user.isActive) {
-        console.log("User not Active");
         return res.status(400).json({
           status: false,
-          message: "Account deleted",
+          message: "Account is inactive",
         });
       }
       if (user.isVerified) {
@@ -36,48 +31,63 @@ export const signUpUser = async (req, res) => {
           message: "User already exists",
         });
       }
-    }
-    if (!user) {
-      const createUser = new UserModel({
-        name: name,
-        phoneNo: phoneNo,
-        email: _email,
-        password: password,
+    } else {
+      // 🚀 Check if user has a wallet account but without an email
+      let walletUser = await UserModel.findOne({
+        walletKey: { $ne: null },
+        email: { $regex: /^User_.*@.*$/, $options: "i" }, // Detects dummy email
       });
-      user = await createUser.save();
-      console.log("user created : ", createUser);
+
+      if (walletUser) {
+        console.log("Updating wallet-based account with real email/password");
+        walletUser.name = name;
+        walletUser.phoneNo = phoneNo;
+        walletUser.email = _email;
+        walletUser.password = password;
+        await walletUser.save();
+        user = walletUser;
+      } else {
+        // No wallet user exists → create a new user
+        const newUser = new UserModel({
+          name,
+          phoneNo,
+          email: _email,
+          password,
+        });
+        user = await newUser.save();
+      }
     }
-    // ----------------------------------------------------------------
+
+    // Generate OTP
     const { otp, otpExpiry, success } = generateOtp();
     if (!success) {
       return res.status(400).json({
         status: false,
-        message: "Error while generating OTP",
+        message: "Error generating OTP",
       });
     }
     user.otp = otp;
     user.otpExpiry = otpExpiry;
     await user.save();
 
-    // ----------------------------------------------------------------
-    sendOtpEmail(
-      _email,
-      otp,
-      "Email Verification Code for Trading Bot Registration"
-    );
+    // Send OTP email
+    sendOtpEmail(_email, otp, "Verify Your Email for Signup");
 
     return res.status(200).json({
       status: true,
-      message: "Check your email for OTP.",
+      message: "Check your email for OTP verification",
     });
+
   } catch (error) {
-    console.log("Error : ", error);
+    console.error("Signup Error:", error);
     return res.status(500).json({
       status: false,
-      message: error,
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
+
 export const resendOTP = async (req, res) => {
   const { email } = req.body;
   if (!email) {
@@ -653,6 +663,244 @@ export const updatePassword = async (req, res) => {
     return res.status(500).json({
       status: false,
       message: error,
+    });
+  }
+};
+
+export const connectWallet = async (req, res) => {
+  const { walletKey } = req.body;
+
+  if (!walletKey) {
+    return res.status(400).json({
+      status: false,
+      message: "Wallet key is required",
+    });
+  }
+
+  try {
+    // Find the current authenticated user
+    const user = await UserModel.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    // Check if this wallet key is already associated with another user
+    const existingWalletUser = await UserModel.findOne({ walletKey });
+    if (
+      existingWalletUser &&
+      existingWalletUser._id.toString() !== user._id.toString()
+    ) {
+      return res.status(400).json({
+        status: false,
+        message: "This wallet is already connected to another account",
+      });
+    }
+
+    // Update user with wallet key
+    user.walletKey = walletKey;
+    await user.save();
+
+    return res.status(200).json({
+      status: true,
+      message: "Wallet connected successfully",
+      walletKey: user.walletKey,
+    });
+  } catch (error) {
+    console.error("Wallet Connection Error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+// Optional: Method to disconnect wallet
+export const disconnectWallet = async (req, res) => {
+  try {
+    const user = await UserModel.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    if (!user.walletKey) {
+      return res.status(400).json({
+        status: false,
+        message: "No wallet connected",
+      });
+    }
+
+    // Clear the wallet key
+    user.walletKey = null;
+    await user.save();
+
+    return res.status(200).json({
+      status: true,
+      message: "Wallet disconnected successfully",
+    });
+  } catch (error) {
+    console.error("Wallet Disconnection Error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+export const checkWalletConnection = async (req, res) => {
+  try {
+    const user = await UserModel.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      status: true,
+      walletConnected: !!user.walletKey,
+      walletKey: user.walletKey,
+    });
+  } catch (error) {
+    console.error("Wallet Connection Check Error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+
+export const walletLogin = async (req, res) => {
+  const { walletKey } = req.body;
+
+  if (!walletKey) {
+    return res.status(400).json({
+      status: false,
+      message: "Wallet key is required",
+    });
+  }
+
+  try {
+    let user = await UserModel.findOne({ walletKey });
+
+    if (user) {
+      // If user already has a proper email, return it
+      const token = user.getToken();
+      return res.status(200).json({
+        status: true,
+        message: "Login successful",
+        token,
+        isNewUser: false,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          walletKey: user.walletKey,
+        },
+      });
+    }
+
+    // No existing user → Create a new one with a dummy email
+    const newUser = new UserModel({
+      name: `User_${uuidv4().slice(0, 8)}`,
+      email: `dummy@wallet.com`, // Temporary email
+      password: uuidv4(), // Random password
+      walletKey,
+      isVerified: true,
+      role: "User",
+    });
+
+    await newUser.save();
+    const token = newUser.getToken();
+
+    return res.status(201).json({
+      status: true,
+      message: "New user created via wallet",
+      token,
+      isNewUser: true,
+      user: {
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        walletKey: newUser.walletKey,
+      },
+    });
+
+  } catch (error) {
+    console.error("Wallet Login Error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
+
+export const updateWalletUser = async (req, res) => {
+  const { name, email } = req.body;
+  const userId = req.user._id;
+
+  try {
+    const user = await UserModel.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        status: false,
+        message: "User not found"
+      });
+    }
+
+    // Check if email is already in use (excluding current user)
+    if (email) {
+      const existingEmail = await UserModel.findOne({ 
+        email: email.toLowerCase(),
+        _id: { $ne: userId } 
+      });
+
+      if (existingEmail) {
+        return res.status(400).json({
+          status: false,
+          message: "Email already in use"
+        });
+      }
+    }
+
+    // Update user details
+    if (name) user.name = name;
+    if (email) user.email = email.toLowerCase();
+
+    await user.save();
+
+    return res.status(200).json({
+      status: true,
+      message: "User profile updated successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        walletKey: user.walletKey
+      }
+    });
+  } catch (error) {
+    console.error("Update Wallet User Error:", error);
+    return res.status(500).json({
+      status: false,
+      message: "Internal server error",
+      error: error.message
     });
   }
 };
