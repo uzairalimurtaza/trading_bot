@@ -488,12 +488,27 @@ export const onOFF2Factor = async (req, res) => {
         message: "Check your email for OTP.",
       });
     } else {
-      req.user.is2Factor = false;
+      const { otp, otpExpiry, success } = generateOtp();
+      if (!success) {
+        return res.status(400).json({
+          status: false,
+          message: "Error while generating OTP",
+        });
+      }
+
+      req.user.otp = otp;
+      req.user.otpExpiry = otpExpiry;
       await req.user.save();
+
+      sendOtpEmail(
+        req.user.email,
+        otp,
+        "Two-Factor Authentication Disablement Verification Code for Trading Bot"
+      );
+
       return res.status(200).json({
         status: true,
-        message: "2FA disabled successfully",
-        user: req.user,
+        message: "Check your email for OTP.",
       });
     }
   } catch (error) {
@@ -504,6 +519,45 @@ export const onOFF2Factor = async (req, res) => {
     });
   }
 };
+
+export const verify2FADisablement = async (req, res) => {
+  const { otp } = req.body;
+  if (!otp) {
+    return res.status(400).json({
+      status: false,
+      message: "Please provide the OTP",
+    });
+  }
+  try {
+    const { success, message, user } = await validateOtp(
+      req.user.email,
+      otp,
+      false
+    );
+    if (!success) {
+      return res.status(400).json({ status: false, message });
+    }
+
+    // Clear OTP and disable 2FA
+    user.otp = "";
+    user.otpExpiry = "";
+    user.is2Factor = false;
+    await user?.save();
+
+    return res.status(200).json({
+      status: true,
+      message: "2FA disabled successfully",
+      user: user,
+    });
+  } catch (error) {
+    console.log("Error : ", error);
+    return res.status(500).json({
+      status: false,
+      message: error,
+    });
+  }
+};
+
 export const resend2FAOTPProfile = async (req, res) => {
   try {
     const { otp, otpExpiry, success } = generateOtp();

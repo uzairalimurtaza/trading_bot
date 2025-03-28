@@ -15,6 +15,7 @@ import {
   resend2FAOTP,
   verify2FAOTP,
   updatePassword,
+  verify2FADisablement,
 } from "../controllers/auth.controllers.js";
 import { auth } from "../middlewares/auth.js";
 
@@ -34,6 +35,7 @@ router.post("/resend2FAOTP", resend2FAOTP);
 router.post("/verify2FAOTP", verify2FAOTP);
 
 router.post("/onOFF2Factor", auth, onOFF2Factor);
+router.post("/verify2FADisablement", auth, verify2FADisablement);
 router.get("/resend2FAOTPProfile", auth, resend2FAOTPProfile);
 router.post("/verify2FAOTPProfile", auth, verify2FAOTPProfile);
 
