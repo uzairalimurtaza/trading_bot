@@ -16,6 +16,11 @@ import {
   verify2FAOTP,
   updatePassword,
   verify2FADisablement,
+  connectWallet,
+  disconnectWallet,
+  checkWalletConnection,
+  walletLogin,
+  updateWalletUser
 } from "../controllers/auth.controllers.js";
 import { auth } from "../middlewares/auth.js";
 
@@ -40,5 +45,12 @@ router.get("/resend2FAOTPProfile", auth, resend2FAOTPProfile);
 router.post("/verify2FAOTPProfile", auth, verify2FAOTPProfile);
 
 router.post("/updatePassword", auth, updatePassword);
+
+router.post("/connect-wallet", auth, connectWallet);
+router.post("/disconnect-wallet", auth, disconnectWallet);
+router.post("/check-wallet-connection", auth, checkWalletConnection);
+
+router.post("/wallet-login",  walletLogin);
+router.post("/update-wallet-user",  updateWalletUser);
 
 export default router;
