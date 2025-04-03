@@ -32,10 +32,10 @@ export const signUpUser = async (req, res) => {
         });
       }
     } else {
-      // 🚀 Check if user has a wallet account but without an email
+      // 🚀 Check if user has a wallet account but no real email
       let walletUser = await UserModel.findOne({
         walletKey: { $ne: null },
-        email: { $regex: /^User_.*@.*$/, $options: "i" }, // Detects dummy email
+        email: { $regex: /^dummy@wallet\.com$/, $options: "i" }, // Detect dummy email
       });
 
       if (walletUser) {
@@ -87,6 +87,7 @@ export const signUpUser = async (req, res) => {
     });
   }
 };
+
 
 export const resendOTP = async (req, res) => {
   const { email } = req.body;
@@ -164,73 +165,52 @@ export const verifyOTP = async (req, res) => {
 export const loginUser = async (req, res) => {
   const { email, password } = req.body;
   if (!(email && password)) {
-    console.log("Invalid input");
     return res.status(400).json({
       status: false,
-      message: `Please ensure that you are sending all the required fields ( email, password )`,
+      message: "Please provide email and password",
     });
   }
+
   try {
     const _email = email.toLowerCase();
-    let userRecord = await UserModel.findOne({ email: _email }).select(
-      "+password"
-    );
-    const { success, message, user } = await validateUser(email, false);
-    if (!success) {
-      return res.status(400).json({ status: false, message });
+    let user = await UserModel.findOne({ email: _email }).select("+password");
+
+    if (!user) {
+      return res.status(400).json({
+        status: false,
+        message: "User not found",
+      });
     }
 
-    let result = await userRecord.comparePassword(password);
-    if (!result) {
-      console.log("Invalid password");
+    // Compare password
+    const isPasswordValid = await user.comparePassword(password);
+    if (!isPasswordValid) {
       return res.status(400).json({
         status: false,
         message: "Invalid password",
       });
     }
 
-    if (userRecord.is2Factor) {
-      const { otp, otpExpiry, success } = generateOtp();
-      if (!success) {
-        return res.status(400).json({
-          status: false,
-          message: "Error while generating OTP",
-        });
-      }
-      userRecord.otp = otp;
-      userRecord.otpExpiry = otpExpiry;
-      await userRecord.save();
-      sendOtpEmail(
-        _email,
-        otp,
-        "Email Verification Code for Trading Bot Login"
-      );
+    const token = user.getToken();
+    return res.status(200).json({
+      status: true,
+      message: "Logged in successfully",
+      token,
+      name: user.name,
+      email: user.email,
+      walletKey: user.walletKey, // Include walletKey if present
+    });
 
-      return res.status(200).json({
-        status: true,
-        message: "Check your email for OTP .",
-        is2Factor: userRecord.is2Factor,
-      });
-    } else {
-      const token = user.getToken();
-      return res.status(200).json({
-        status: true,
-        message: "Logged in successfully",
-        token: token,
-        name: user.name,
-        email: user.email,
-        is2Factor: user.is2Factor,
-        ...user._doc,
-      });
-    }
   } catch (error) {
-    console.log("Error : ", error);
+    console.error("Login Error:", error);
     return res.status(500).json({
       status: false,
-      message: error,
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
+
 export const forgotPassword = async (req, res) => {
   const { email } = req.body;
   if (!email) {
