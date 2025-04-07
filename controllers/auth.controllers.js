@@ -764,7 +764,7 @@ export const checkWalletConnection = async (req, res) => {
 
 
 export const walletLogin = async (req, res) => {
-  const { walletKey } = req.body;
+  const { walletKey, subscribedPlan } = req.body;
 
   if (!walletKey) {
     return res.status(400).json({
@@ -774,48 +774,41 @@ export const walletLogin = async (req, res) => {
   }
 
   try {
-    let user = await UserModel.findOne({ walletKey });
+    // Use findOneAndUpdate with upsert to avoid race conditions
+    let user = await UserModel.findOneAndUpdate(
+      { walletKey },
+      {
+        $setOnInsert: {
+          name: `User_${uuidv4().slice(0, 8)}`,
+          email: `dummy@wallet.com`,
+          password: uuidv4(),
+          walletKey,
+          isVerified: true,
+          role: "User",
+          subscribedPlan: subscribedPlan,
+        }
+      },
+      { 
+        new: true,
+        upsert: true,
+        setDefaultsOnInsert: true
+      }
+    );
 
-    if (user) {
-      // If user already has a proper email, return it
-      const token = user.getToken();
-      return res.status(200).json({
-        status: true,
-        message: "Login successful",
-        token,
-        isNewUser: false,
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          walletKey: user.walletKey,
-        },
-      });
-    }
+    const token = user.getToken();
+    const isNewUser = user.createdAt.getTime() === user.updatedAt.getTime();
 
-    // No existing user → Create a new one with a dummy email
-    const newUser = new UserModel({
-      name: `User_${uuidv4().slice(0, 8)}`,
-      email: `dummy@wallet.com`, // Temporary email
-      password: uuidv4(), // Random password
-      walletKey,
-      isVerified: true,
-      role: "User",
-    });
-
-    await newUser.save();
-    const token = newUser.getToken();
-
-    return res.status(201).json({
+    return res.status(isNewUser ? 201 : 200).json({
       status: true,
-      message: "New user created via wallet",
+      message: isNewUser ? "New user created via wallet" : "Login successful",
       token,
-      isNewUser: true,
+      isNewUser,
       user: {
-        id: newUser._id,
-        name: newUser.name,
-        email: newUser.email,
-        walletKey: newUser.walletKey,
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        walletKey: user.walletKey,
+        subscribedPlan: user.subscribedPlan,
       },
     });
 
