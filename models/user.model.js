@@ -86,9 +86,12 @@ const User = new mongoose.Schema(
       type: String,
       default: null,
       required: false,
-      // unique: true,
-      // sparse: true,
-      // index: { unique: true, sparse: true }
+      unique: true,
+      sparse: true,
+    },
+    subscribedPlan: {
+      type: String,
+      default: null,
     },
   },
   { timestamps: true }
@@ -118,6 +121,3 @@ User.methods.comparePassword = async function (candidatePassword) {
 
 const UserModel = mongoose.model("User", User);
 export default UserModel;
-
-
-

@@ -83,7 +83,7 @@ export const createCheckoutSession = async (req, res) => {
         allowed_countries: ["US", "CA"],
       },
       success_url: `http://localhost:4005/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `http://localhost:4005/api/strip/cancel`,
+      cancel_url: `https://tradingbot-sable.vercel.app/`,
     });
 
     console.log(session);
