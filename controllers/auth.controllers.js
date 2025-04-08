@@ -785,7 +785,10 @@ export const walletLogin = async (req, res) => {
           walletKey,
           isVerified: true,
           role: "User",
-          subscribedPlan: subscribedPlan,
+          
+        },
+        $set: {
+          subscribedPlan: subscribedPlan
         }
       },
       { 
