@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "payment in crypto and web2",
   "type": "module",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "start": "nodemon --max-old-space-size=1024  server.js --ext js",
     "dev": "nodemon",
