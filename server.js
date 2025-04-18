@@ -5,11 +5,14 @@ import dotenv from "dotenv";
 import bodyParser from "body-parser";
 import router from "./routes/index.js";
 import { connectToDataBase } from "./config/dbConfig.js";
-
+// import morgan from "morgan";
 mongoose.set("strictQuery", true);
 dotenv.config({ path: "./.env" });
 
 const app = express();
+
+// Middleware
+// app.use(morgan("dev"));
 
 // app.post("/api/stripe/webhook", express.raw({ type: "application/json" }));
 

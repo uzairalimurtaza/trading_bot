@@ -52,8 +52,8 @@ export const createCheckoutSession = async (req, res) => {
 
     const plans = {
       basic: { name: "Basic Plan", price: 1000 }, // $10
-      advanced: { name: "advanced Plan", price: 3000 }, // $30
-      Elite: { name: "Elite Plan", price: 5000 }, // $50
+      advanced: { name: "advanced Plan", price: 2000 }, // $20
+      elite: { name: "Elite Plan", price: 3000 }, // $30
     };
 
     if (!plans[plan]) {
@@ -93,6 +93,8 @@ export const createCheckoutSession = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
+
+import UserModel from "../models/user.model.js"; // make sure this is imported
 
 export const successCheckoutSession = async (req, res) => {
   try {
@@ -145,13 +147,21 @@ export const successCheckoutSession = async (req, res) => {
 
     const newPayment = await StripePayment.create(paymentData);
 
-    // console.log("Payment successfully recorded:", newPayment);
+    // 🎯 Add Plan Assignment to the User
+    const plan = session.metadata?.plan || null; // assuming this was passed in metadata
+    if (plan) {
+      const planStartDate = new Date();
+      const planEndDate = new Date();
+      planEndDate.setDate(planStartDate.getDate() + 30); // 30-day membership
 
-    // res.status(200).json({
-    //   success: true,
-    //   message: "Payment successfully recorded",
-    //   payment: newPayment,
-    // });
+      await UserModel.findByIdAndUpdate(session.metadata.userId, {
+        subscribedPlan: plan,
+        stripeCustomerId: session.customer || null,
+        planStartDate,
+        planEndDate,
+      });
+    }
+
     res.send(`
       <html>
         <head>
@@ -196,6 +206,7 @@ export const successCheckoutSession = async (req, res) => {
   }
 };
 
+
 export const handleWebhook = async (req, res) => {
   const sig = req.headers["stripe-signature"];
   let event;
@@ -230,3 +241,63 @@ export const handleWebhook = async (req, res) => {
     res.status(400).json({ error: `Webhook error: ${err.message}` });
   }
 };
+
+export const cancelPlan = async (req, res) => {
+  try {
+    const userId = req.user.id; // Get the user ID from the request
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    // if (!user.stripeCustomerId) {
+    //   return res.status(400).json({ error: "User has no Stripe customer ID" });
+    // }
+    // const subscriptions = await stripe.subscriptions.list({
+    //   customer: user.stripeCustomerId,
+    //   status: "active",
+    // });
+    // if (subscriptions.data.length === 0) {
+    //   return res.status(400).json({ error: "No active subscriptions found" });
+    // }
+    // const subscriptionId = subscriptions.data[0].id;
+    // await stripe.subscriptions.del(subscriptionId);
+    user.subscribedPlan = null;
+    user.planStartDate = null;
+    user.planEndDate = null;
+    await user.save();
+    res.status(200).json({ message: "Plan canceled successfully" });
+  }
+  catch (error) {
+    console.error("Error canceling plan:", error);
+    res.status(500).json({ error: error.message });
+  } 
+}
+// export const getPaymentHistory = async (req, res) => {
+//   try {
+//     const userId = req.user.id; // Get the user ID from the request
+//     const payments = await StripePayment.find({ userId }).sort({ createdAt: -1 });
+//     res.status(200).json(payments);
+//   } catch (error) {
+//     console.error("Error fetching payment history:", error);
+//     res.status(500).json({ error: error.message });
+//   }
+// };
+// export const getUserPlan = async (req, res) => {
+//   try {
+//     const userId = req.user.id; // Get the user ID from the request
+//     const user = await User.findById(userId).select("subscribedPlan planStartDate planEndDate");
+//     if (!user) {
+//       return res.status(404).json({ error: "User not found" });
+//     }
+//     res.status(200).json({
+//       subscribedPlan: user.subscribedPlan,
+//       planStartDate: user.planStartDate,
+//       planEndDate: user.planEndDate,
+//     });
+//   }
+//   catch (error) {
+//     console.error("Error fetching user plan:", error);
+//     res.status(500).json({ error: error.message });
+//   }
+// }
+

@@ -7,6 +7,7 @@ import {
   createCheckoutSession,
   successCheckoutSession,
   handleWebhook,
+  cancelPlan,
 } from "../controllers/stripe.controllers.js";
 
 
@@ -21,6 +22,7 @@ router.post("/create-payment-intent", auth, createCheckoutSession);
 
 router.get("/success", successCheckoutSession);
 
+router.put("/cancel-subscription", auth, cancelPlan);
 router.get("/cancel", (req, res) => {
   res.send("paymentSend  cancel!");
 });

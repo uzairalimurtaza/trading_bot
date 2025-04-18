@@ -93,6 +93,14 @@ const User = new mongoose.Schema(
       type: String,
       default: null,
     },
+    planStartDate: {
+      type: Date,
+      default: null,
+    },
+    planEndDate: {
+      type: Date,
+      default: null,
+    }
   },
   { timestamps: true }
 );
