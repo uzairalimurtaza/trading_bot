@@ -172,19 +172,38 @@ export const successCheckoutSession = async (req, res) => {
               font-family: Arial, sans-serif;
               text-align: center;
               padding: 50px;
+              background-color: #f9f9f9;
             }
             .container {
               max-width: 500px;
               margin: 0 auto;
-              padding: 20px;
-              box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
-              border-radius: 10px;
+              padding: 30px;
+              background-color: #ffffff;
+              box-shadow: 0px 0px 15px rgba(0, 0, 0, 0.1);
+              border-radius: 12px;
             }
             h1 {
-              color: green;
+              color: #2ecc71;
             }
             p {
               font-size: 18px;
+              margin: 15px 0;
+            }
+            .btn {
+              margin-top: 30px;
+              display: inline-block;
+              background-color: #4a90e2;
+              color: white;
+              padding: 12px 24px;
+              font-size: 16px;
+              font-weight: 600;
+              text-decoration: none;
+              border-radius: 8px;
+              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+              transition: background-color 0.3s ease;
+            }
+            .btn:hover {
+              background-color: #357ab8;
             }
           </style>
         </head>
@@ -193,6 +212,9 @@ export const successCheckoutSession = async (req, res) => {
             <h1>🎉 Payment Successful!</h1>
             <p>Thank you for your payment of <strong>$${paymentData.amount}</strong>!</p>
             <p>Your transaction has been successfully recorded.</p>
+            <a href="https://trading-bot-seven-plum.vercel.app/setting" class="btn">
+              Go to Account Settings
+            </a>
           </div>
         </body>
       </html>
