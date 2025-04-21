@@ -11,38 +11,60 @@ const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:4005";
 // ========================================================
 // Create Stripe Customer for Authenticated User
 // ========================================================
-export const createCustomer = async (req, res) => {
+export const createCustomer = async (email, name) => {
   try {
-    const { name, email } = req.body;
-    if (!name || !email) {
-      return res.status(400).json({ error: "Name and email are required" });
-    }
-
-    // Create a new customer in Stripe
-    const customer = await stripe.customers.create({ name, email });
-
-    // Update the user in DB with Stripe customer ID
-    const updatedUser = await User.findByIdAndUpdate(
-      req.user.id,
-      { stripeCustomerId: customer.id },
-      { new: true }
-    );
-
-    if (!updatedUser) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Customer created successfully",
-      customer,
-      user: updatedUser,
+    const customer = await stripe.customers.create({
+      email,
+      name,
+      description: "New Trading Bot User",
     });
+
+    return {
+      success: true,
+      customer,
+    };
   } catch (error) {
-    console.error("Error creating customer:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Error creating Stripe customer:", error.message);
+    return {
+      success: false,
+      message: error.message,
+    };
   }
 };
+
+// export const createCustomer = async (req, res) => {
+//   try {
+//     const { name, email } = req.body;
+//     if (!name || !email) {
+//       return res.status(400).json({ error: "Name and email are required" });
+//     }
+
+//     // Create a new customer in Stripe
+//     const customer = await stripe.customers.create({ name, email });
+
+//     // Update the user in DB with Stripe customer ID
+//     const updatedUser = await User.findByIdAndUpdate(
+//       req.user.id,
+//       { stripeCustomerId: customer.id },
+//       { new: true }
+//     );
+
+//     if (!updatedUser) {
+//       return res.status(404).json({ error: "User not found" });
+//     }
+
+//     res.status(200).json({
+//       success: true,
+//       message: "Customer created successfully",
+//       customer,
+//       user: updatedUser,
+//     });
+//   } catch (error) {
+//     console.error("Error creating customer:", error);
+//     res.status(500).json({ error: "Internal Server Error" });
+//   }
+// };
+
 
 // ========================================================
 // Create Stripe Subscription Checkout Session
