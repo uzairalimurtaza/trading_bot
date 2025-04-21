@@ -3,7 +3,6 @@
 import express from "express";
 import { auth } from "../middlewares/auth.js";
 import {
-  createCustomer,
   createCheckoutSession,
   successCheckoutSession,
   handleWebhook,
@@ -17,7 +16,7 @@ const router = express.Router();
 // ============================
 // Stripe Customer
 // ============================
-router.post("/create-customer", auth, createCustomer);
+// router.post("/create-customer", auth, createStripeCustomer);
 
 // ============================
 // Checkout / Subscription
