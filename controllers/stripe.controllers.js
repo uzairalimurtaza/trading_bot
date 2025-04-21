@@ -13,18 +13,34 @@ const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:4005";
 // ========================================================
 export const createStripeCustomer = async (email, name) => {
   try {
+    // 1. Create customer on Stripe
     const customer = await stripe.customers.create({
       email,
       name,
-      description: "New Trading Bot User",
+      description: "Trading Bot Signup Customer",
     });
+
+    // 2. Find and update user in DB with Stripe customer ID
+    const user = await User.findOneAndUpdate(
+      { email: email.toLowerCase() },
+      { stripeCustomerId: customer.id },
+    );
+
+    if (!user) {
+      return {
+        success: false,
+        message: "User not found in DB to update Stripe ID",
+      };
+    }
 
     return {
       success: true,
+      message: "Stripe customer created and user updated",
       customer,
+      user,
     };
   } catch (error) {
-    console.error("Error creating Stripe customer:", error.message);
+    console.error("Stripe Customer Error:", error.message);
     return {
       success: false,
       message: error.message,
