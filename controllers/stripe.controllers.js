@@ -82,7 +82,8 @@ export const createCheckoutSession = async (req, res) => {
       shipping_address_collection: {
         allowed_countries: ["US", "CA"],
       },
-      success_url: `http://localhost:4005/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `https://tradingbotapi.thecbt.live/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
+      // success_url: `http://localhost:4005/api/stripe/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `https://tradingbot-sable.vercel.app/`,
     });
 
