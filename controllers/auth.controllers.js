@@ -4,11 +4,12 @@ import { sendOtpEmail } from "../services/email/sendEmail.js";
 import { generateOtp, validateOtp } from "../services/otp/generateOtp.js";
 import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from 'uuid';
-import { createCustomer } from "./stripe.controllers.js";
+import { createStripeCustomer } from "./stripe.controllers.js";
 
 export const signUpUser = async (req, res) => {
   const { name, phoneNo, email, password } = req.body;
 
+  // Validate required fields
   if (!(name && phoneNo && email && password)) {
     return res.status(400).json({
       status: false,
@@ -18,18 +19,8 @@ export const signUpUser = async (req, res) => {
 
   const _email = email.toLowerCase();
 
-  // ✅ 1. Create Stripe Customer
-  const createStripeUser = await createCustomer(_email, name);
-  if (!createStripeUser?.success) {
-    return res.status(400).json({
-      status: false,
-      message: "Error creating Stripe customer",
-      stripeError: createStripeUser.message,
-    });
-  }
-
   try {
-    const _email = email.toLowerCase();
+    // Check if the user already exists in the database
     let user = await UserModel.findOne({ email: _email });
 
     if (user) {
@@ -46,40 +37,46 @@ export const signUpUser = async (req, res) => {
         });
       }
     } else {
-      // 🚀 Check if user has a wallet account but no real email
-      let walletUser = await UserModel.findOne({
-        walletKey: { $ne: null },
-        email: { $regex: /^dummy@wallet\.com$/, $options: "i" }, // Detect dummy email
+      // Create a new user in the database if no existing user is found
+      const newUser = new UserModel({
+        name,
+        phoneNo,
+        email: _email,
+        password,
       });
-
-      if (walletUser) {
-        console.log("Updating wallet-based account with real email/password");
-        walletUser.name = name;
-        walletUser.phoneNo = phoneNo;
-        walletUser.email = _email;
-        walletUser.password = password;
-        await walletUser.save();
-        user = walletUser;
-      } else {
-        // No wallet user exists → create a new user
-        const newUser = new UserModel({
-          name,
-          phoneNo,
-          email: _email,
-          password,
-        });
-        user = await newUser.save();
-      }
+      user = await newUser.save();
     }
 
-    // Generate OTP
+    // Create a Stripe customer
+    const createStripeResponse = await createStripeCustomer(email, name);
+
+    // Handle failure in Stripe customer creation
+    if (!createStripeResponse.success) {
+      // Rollback the user creation if Stripe creation fails
+      await UserModel.findByIdAndDelete(user._id); // Delete user from DB
+
+      return res.status(400).json({
+        status: false,
+        message: `Error creating Stripe customer: ${createStripeResponse.message}`,
+      });
+    }
+
+    // Store the Stripe customer ID in the user record
+    user.stripeCustomerId = createStripeResponse.customer.id;
+    await user.save();
+
+    // Generate OTP for email verification
     const { otp, otpExpiry, success } = generateOtp();
     if (!success) {
+      // Rollback the user record if OTP generation fails
+      await UserModel.findByIdAndDelete(user._id); // Delete user from DB
       return res.status(400).json({
         status: false,
         message: "Error generating OTP",
       });
     }
+
+    // Save OTP and expiry in the user record
     user.otp = otp;
     user.otpExpiry = otpExpiry;
     await user.save();
@@ -87,6 +84,7 @@ export const signUpUser = async (req, res) => {
     // Send OTP email
     sendOtpEmail(_email, otp, "Verify Your Email for Signup");
 
+    // Return success response
     return res.status(200).json({
       status: true,
       message: "Check your email for OTP verification",

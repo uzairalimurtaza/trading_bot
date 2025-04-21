@@ -11,7 +11,7 @@ const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:4005";
 // ========================================================
 // Create Stripe Customer for Authenticated User
 // ========================================================
-export const createCustomer = async (email, name) => {
+export const createStripeCustomer = async (email, name) => {
   try {
     const customer = await stripe.customers.create({
       email,
