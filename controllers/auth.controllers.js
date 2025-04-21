@@ -4,13 +4,27 @@ import { sendOtpEmail } from "../services/email/sendEmail.js";
 import { generateOtp, validateOtp } from "../services/otp/generateOtp.js";
 import jwt from "jsonwebtoken";
 import { v4 as uuidv4 } from 'uuid';
+import { createCustomer } from "./stripe.controllers.js";
 
 export const signUpUser = async (req, res) => {
   const { name, phoneNo, email, password } = req.body;
+
   if (!(name && phoneNo && email && password)) {
     return res.status(400).json({
       status: false,
       message: "Please provide name, phone number, email, and password",
+    });
+  }
+
+  const _email = email.toLowerCase();
+
+  // ✅ 1. Create Stripe Customer
+  const createStripeUser = await createCustomer(_email, name);
+  if (!createStripeUser?.success) {
+    return res.status(400).json({
+      status: false,
+      message: "Error creating Stripe customer",
+      stripeError: createStripeUser.message,
     });
   }
 
