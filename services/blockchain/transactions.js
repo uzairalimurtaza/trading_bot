@@ -29,6 +29,7 @@ export const parseTransaction = async (hash) => {
     });
     const data = await response.json();
     console.log(data[0].description);
+    //save to db transaction record 
     return {
       success: true,
       from: data[0].nativeTransfers[0].fromUserAccount,
