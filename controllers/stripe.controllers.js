@@ -8,9 +8,8 @@ dotenv.config();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const FRONT_END_URL = process.env.FRONT_END_URL || "http://localhost:3000";
 const API_BASE_URL = process.env.API_BASE_URL || "http://localhost:4005";
-// ========================================================
+
 // Create Stripe Customer for Authenticated User
-// ========================================================
 export const createStripeCustomer = async (email, name) => {
   try {
     // 1. Create customer on Stripe
@@ -23,7 +22,7 @@ export const createStripeCustomer = async (email, name) => {
     // 2. Find and update user in DB with Stripe customer ID
     const user = await User.findOneAndUpdate(
       { email: email.toLowerCase() },
-      { stripeCustomerId: customer.id },
+      { stripeCustomerId: customer.id }
     );
 
     if (!user) {
@@ -81,10 +80,7 @@ export const createStripeCustomer = async (email, name) => {
 //   }
 // };
 
-
-// ========================================================
 // Create Stripe Subscription Checkout Session
-// ========================================================
 export const createCheckoutSession = async (req, res) => {
   try {
     const { plan } = req.body;
@@ -108,7 +104,9 @@ export const createCheckoutSession = async (req, res) => {
 
     const user = await User.findById(userId);
     if (!user || !user.stripeCustomerId) {
-      return res.status(400).json({ error: "User must have a Stripe customer ID" });
+      return res
+        .status(400)
+        .json({ error: "User must have a Stripe customer ID" });
     }
 
     // Create subscription session
@@ -137,14 +135,15 @@ export const createCheckoutSession = async (req, res) => {
   }
 };
 
-// ========================================================
 // Handle Successful Checkout Redirect (optional fallback)
-// ========================================================
 export const successCheckoutSession = async (req, res) => {
   try {
-    const session = await stripe.checkout.sessions.retrieve(req.query.session_id, {
-      expand: ["subscription"],
-    });
+    const session = await stripe.checkout.sessions.retrieve(
+      req.query.session_id,
+      {
+        expand: ["subscription"],
+      }
+    );
 
     if (!session) {
       return res.status(404).json({ error: "Session not found" });
@@ -155,7 +154,9 @@ export const successCheckoutSession = async (req, res) => {
 
     if (!paymentIntentId && session.subscription) {
       const subscription = session.subscription;
-      const invoice = await stripe.invoices.retrieve(subscription.latest_invoice);
+      const invoice = await stripe.invoices.retrieve(
+        subscription.latest_invoice
+      );
       paymentIntentId = invoice.payment_intent;
     }
 
@@ -192,10 +193,7 @@ export const successCheckoutSession = async (req, res) => {
   }
 };
 
-
-// ========================================================
 // Stripe Webhook: Subscription Events
-// ========================================================
 export const handleWebhook = async (req, res) => {
   const sig = req.headers["stripe-signature"];
   let event;
@@ -241,9 +239,7 @@ export const handleWebhook = async (req, res) => {
   }
 };
 
-// ========================================================
 // Cancel Current Plan (manual override)
-// ========================================================
 export const cancelPlan = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -264,9 +260,7 @@ export const cancelPlan = async (req, res) => {
   }
 };
 
-// ========================================================
 // Optional: Get User Plan Info
-// ========================================================
 export const getUserPlan = async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select(
@@ -286,12 +280,12 @@ export const getUserPlan = async (req, res) => {
   }
 };
 
-// ========================================================
 // Optional: Get Payment History
-// ========================================================
 export const getPaymentHistory = async (req, res) => {
   try {
-    const payments = await StripePayment.find({ userId: req.user.id }).sort({ createdAt: -1 });
+    const payments = await StripePayment.find({ userId: req.user.id }).sort({
+      createdAt: -1,
+    });
     res.status(200).json(payments);
   } catch (error) {
     console.error("Error fetching payment history:", error);

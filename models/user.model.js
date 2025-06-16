@@ -100,7 +100,7 @@ const User = new mongoose.Schema(
     planEndDate: {
       type: Date,
       default: null,
-    }
+    },
   },
   { timestamps: true }
 );
@@ -122,7 +122,7 @@ User.pre("save", async function (next) {
     return next(err);
   }
 });
-// Method to compare passwords
+
 User.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };

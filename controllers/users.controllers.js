@@ -6,7 +6,9 @@ export const getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const user = await UserModel.findById(userId).select("name email phoneNo subscribedPlan planStartDate planEndDate walletKey");
+    const user = await UserModel.findById(userId).select(
+      "name email phoneNo subscribedPlan planStartDate planEndDate walletKey"
+    );
     if (!user) return res.status(404).json({ message: "User not found" });
 
     res.status(200).json({ user });
@@ -39,13 +41,13 @@ export const updateUserProfile = async (req, res) => {
 
     // res.status(200).json({ message: "Profile updated successfully", user });
     res.status(200).json({
-        success: true,
-        message: "User profile updated successfully",
-        user: {
-          name: user.name,
-          phoneNo: user.phoneNo,
-        }
-      });
+      success: true,
+      message: "User profile updated successfully",
+      user: {
+        name: user.name,
+        phoneNo: user.phoneNo,
+      },
+    });
   } catch (err) {
     res.status(500).json({ message: "Update failed", error: err.message });
   }
