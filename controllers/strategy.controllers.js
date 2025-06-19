@@ -1,0 +1,119 @@
+import axios from "axios";
+import StrategyModel from "../models/strategy.model.js";
+
+export const addPMMSimpleConfig = async (req, res) => {
+  try {
+    const { name, version, content } = req.body;
+
+    if (!name || !version || !content) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing name , version or content in request body",
+      });
+    }
+    const userId = req.user.id;
+    const nameVersion = `${name}_${version}`;
+    const nameVersionUserId = `${name}_${version}_${userId}`;
+
+    /*take_profit_order_type: limit(2), market(1);
+      leverage (1 for spot trading)
+      candles_config: [] here its empty coz its simple pmm strategy 
+      position_mode here we have used it static coz its related to future trading and currently we are doing spot trading*/
+
+    const processedContent = {
+      id: nameVersionUserId,
+      controller_name: "pmm_simple",
+      controller_type: "market_making",
+      manual_kill_switch: false,
+      leverage: 1,
+      candles_config: [],
+      position_mode: "HEDGE",
+      ...content,
+    };
+
+    // Convert percentages to decimals
+    processedContent.buy_spreads = processedContent.buy_spreads.map(
+      (v) => v / 100
+    );
+    processedContent.sell_spreads = processedContent.sell_spreads.map(
+      (v) => v / 100
+    );
+    processedContent.stop_loss = processedContent.stop_loss / 100;
+    processedContent.take_profit = processedContent.take_profit / 100;
+    processedContent.trailing_stop.activation_price =
+      processedContent.trailing_stop.activation_price / 100;
+    processedContent.trailing_stop.trailing_delta =
+      processedContent.trailing_stop.trailing_delta / 100;
+
+    // Normalize buy and sell amounts
+    const normalize = (arr) => {
+      const sum = arr.reduce((acc, val) => acc + val, 0);
+      return arr.map((val) => val / sum);
+    };
+
+    processedContent.buy_amounts_pct = normalize(
+      processedContent.buy_amounts_pct
+    );
+    processedContent.sell_amounts_pct = normalize(
+      processedContent.sell_amounts_pct
+    );
+
+    processedContent.executor_refresh_time =
+      processedContent.executor_refresh_time * 60;
+    processedContent.cooldown_time = processedContent.cooldown_time * 60;
+    processedContent.time_limit = processedContent.time_limit * 60;
+    console.log(processedContent);
+
+    const payload = {
+      name: nameVersionUserId,
+      content: processedContent,
+    };
+
+    const hummingUrl = `${process.env.HUMMING_BOT_API_BASE_URL}/add-controller-config`;
+
+    try {
+      const response = await axios.post(hummingUrl, payload, {
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        auth: {
+          username: process.env.HUMMING_BOT_USERNAME,
+          password: process.env.HUMMING_BOT_PASSWORD,
+        },
+      });
+    } catch (error) {
+      const err =
+        error.response?.data?.detail || "Failed to add controller config.";
+      const status = error.response?.status || 500;
+      return res.status(status).json({
+        success: false,
+        message: err,
+      });
+    }
+
+    await StrategyModel.findOneAndUpdate(
+      { strategyFileUniqueName: nameVersionUserId },
+      {
+        userId,
+        strategyFileName: nameVersion,
+        strategyFileUniqueName: nameVersionUserId,
+        controllerName: processedContent.controller_name,
+        controllerType: processedContent.controller_type,
+        config: processedContent,
+      },
+      { upsert: true, new: true }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Controller config added successfully",
+    });
+  } catch (err) {
+    console.error("Error in adding PMMSimple Config : ", err);
+    return res.status(500).json({
+      success: false,
+      message: "Error uploading PMMSimple config file .",
+    });
+  }
+};
