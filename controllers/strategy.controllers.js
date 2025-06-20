@@ -13,14 +13,14 @@ export const addPMMSimpleConfig = async (req, res) => {
     }
     const userId = req.user.id;
     const nameVersion = `${name}_${version}`;
-    const nameVersionUserId = `${name}_${version}_${userId}`;
+    const nameVersionUserId = `${userId}_${name}_${version}`;
 
     /*take_profit_order_type: limit(2), market(1);
       leverage (1 for spot trading)
       candles_config: [] here its empty coz its simple pmm strategy 
       position_mode here we have used it static coz its related to future trading and currently we are doing spot trading*/
 
-    const processedContent = {
+    const baseContent = {
       id: nameVersionUserId,
       controller_name: "pmm_simple",
       controller_type: "market_making",
@@ -30,6 +30,9 @@ export const addPMMSimpleConfig = async (req, res) => {
       position_mode: "HEDGE",
       ...content,
     };
+
+    const configContent = JSON.parse(JSON.stringify(baseContent));
+    const processedContent = JSON.parse(JSON.stringify(baseContent));
 
     // Convert percentages to decimals
     processedContent.buy_spreads = processedContent.buy_spreads.map(
@@ -51,12 +54,15 @@ export const addPMMSimpleConfig = async (req, res) => {
       return arr.map((val) => val / sum);
     };
 
-    processedContent.buy_amounts_pct = normalize(
-      processedContent.buy_amounts_pct
-    );
-    processedContent.sell_amounts_pct = normalize(
-      processedContent.sell_amounts_pct
-    );
+    const combinedAmounts = [
+      ...processedContent.buy_amounts_pct,
+      ...processedContent.sell_amounts_pct,
+    ];
+    const normalizedCombined = normalize(combinedAmounts);
+
+    const buyLength = processedContent.buy_amounts_pct.length;
+    processedContent.buy_amounts_pct = normalizedCombined.slice(0, buyLength);
+    processedContent.sell_amounts_pct = normalizedCombined.slice(buyLength);
 
     processedContent.executor_refresh_time =
       processedContent.executor_refresh_time * 60;
@@ -100,7 +106,7 @@ export const addPMMSimpleConfig = async (req, res) => {
         strategyFileUniqueName: nameVersionUserId,
         controllerName: processedContent.controller_name,
         controllerType: processedContent.controller_type,
-        config: processedContent,
+        config: configContent,
       },
       { upsert: true, new: true }
     );
@@ -114,6 +120,53 @@ export const addPMMSimpleConfig = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Error uploading PMMSimple config file .",
+    });
+  }
+};
+
+export const getUserStrategyFileNames = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const strategies = await StrategyModel.find({ userId }).select(
+      "strategyFileName -_id"
+    );
+    const fileNames = strategies.map((s) => s.strategyFileName);
+
+    return res.status(200).json({
+      success: true,
+      strategyFileNames: fileNames,
+    });
+  } catch (err) {
+    console.error("Error fetching strategy file names:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching strategy file names",
+    });
+  }
+};
+
+export const getUserStrategies = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const strategies = await StrategyModel.find({ userId }).select(
+      "strategyFileName config"
+    );
+
+    const formatted = {};
+    strategies.forEach((strategy) => {
+      formatted[strategy.strategyFileName] = strategy.config;
+    });
+
+    return res.status(200).json({
+      success: true,
+      strategies: formatted,
+    });
+  } catch (err) {
+    console.error("Error fetching user strategies:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch strategies",
     });
   }
 };
