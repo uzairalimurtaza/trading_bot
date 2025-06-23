@@ -155,7 +155,44 @@ export const getUserStrategies = async (req, res) => {
 
     const formatted = {};
     strategies.forEach((strategy) => {
-      formatted[strategy.strategyFileName] = strategy.config;
+      const config = strategy.config;
+
+      const {
+        connector_name,
+        trading_pair,
+        total_amount_quote,
+        buy_spreads,
+        sell_spreads,
+        buy_amounts_pct,
+        sell_amounts_pct,
+        executor_refresh_time,
+        cooldown_time,
+        stop_loss,
+        take_profit,
+        time_limit,
+        take_profit_order_type,
+        trailing_stop,
+      } = config;
+
+      const max_loss = (total_amount_quote * (stop_loss / 100)) / 2;
+
+      formatted[strategy.strategyFileName] = {
+        connector_name,
+        trading_pair,
+        total_amount_quote,
+        buy_spreads,
+        sell_spreads,
+        buy_amounts_pct,
+        sell_amounts_pct,
+        executor_refresh_time,
+        cooldown_time,
+        stop_loss,
+        take_profit,
+        time_limit,
+        take_profit_order_type,
+        trailing_stop,
+        max_loss,
+      };
     });
 
     return res.status(200).json({
