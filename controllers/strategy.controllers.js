@@ -1,6 +1,8 @@
 import axios from "axios";
 import StrategyModel from "../models/strategy.model.js";
 
+// ToDo : remove all extra logs
+
 export const addPMMSimpleConfig = async (req, res) => {
   try {
     const { name, version, content } = req.body;
@@ -208,6 +210,78 @@ export const getUserStrategies = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to fetch strategies",
+    });
+  }
+};
+
+export const deleteStorageFiles = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const { strategyFileNames } = req.body;
+
+    if (!Array.isArray(strategyFileNames) || strategyFileNames.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Incorrect or missing strategyFileNames in request body",
+      });
+    }
+
+    const strategies = await StrategyModel.find({
+      userId,
+      strategyFileName: { $in: strategyFileNames },
+    });
+    if (!strategies || strategies.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No matching strategy files found for the user.",
+      });
+    }
+
+    let deletedCount = 0;
+
+    for (const strategy of strategies) {
+      const uniqueName = strategy.strategyFileUniqueName;
+      const hummingUrl = `${process.env.HUMMING_BOT_API_BASE_URL}/delete-controller-config?config_name=${uniqueName}.yml`;
+
+      try {
+        await axios.post(hummingUrl, null, {
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          auth: {
+            username: process.env.HUMMING_BOT_USERNAME,
+            password: process.env.HUMMING_BOT_PASSWORD,
+          },
+        });
+
+        await StrategyModel.deleteOne({ _id: strategy._id });
+        deletedCount++;
+        console.log(`✅ Deleted config: ${uniqueName}`);
+      } catch (error) {
+        const errMsg =
+          error.response?.data?.detail || "Failed to delete controller config.";
+        const statusCode = error.response?.status || 500;
+
+        return res.status(statusCode).json({
+          success: false,
+          message: `Error deleting config "${uniqueName}": ${errMsg}`,
+          deleted: deletedCount,
+        });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Strategies deleted successfully",
+      deleted: deletedCount,
+    });
+  } catch (err) {
+    console.error("❌ Error during bulk delete:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Bulk delete failed",
     });
   }
 };
