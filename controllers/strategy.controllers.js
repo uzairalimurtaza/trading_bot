@@ -158,6 +158,8 @@ export const getUserStrategies = async (req, res) => {
       const config = strategy.config;
 
       const {
+        controller_name,
+        controller_type,
         connector_name,
         trading_pair,
         total_amount_quote,
@@ -177,6 +179,8 @@ export const getUserStrategies = async (req, res) => {
       const max_loss = (total_amount_quote * (stop_loss / 100)) / 2;
 
       formatted[strategy.strategyFileName] = {
+        controller_name,
+        controller_type,
         connector_name,
         trading_pair,
         total_amount_quote,
