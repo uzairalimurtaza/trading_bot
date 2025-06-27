@@ -1,7 +1,9 @@
 import axios from "axios";
+import AccountModel from "../models/account.model.js";
 import StrategyModel from "../models/strategy.model.js";
+import InstanceModel from "../models/instances.model.js";
 
-// ToDo : remove all extra logs
+// ToDo : remove all extra logs , is docker running or not , etc
 
 export const addPMMSimpleConfig = async (req, res) => {
   try {
@@ -282,6 +284,204 @@ export const deleteStorageFiles = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Bulk delete failed",
+    });
+  }
+};
+
+export const launchBot = async (req, res) => {
+  try {
+    const {
+      botName,
+      credentials,
+      controllerConfigs,
+      globalDrawdown,
+      controllerDrawdown,
+      rebalanceInterval,
+      assetToRebalance,
+    } = req.body;
+
+    const userId = req.user._id;
+
+    if (
+      !botName ||
+      !credentials ||
+      !Array.isArray(controllerConfigs) ||
+      controllerConfigs.length === 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields",
+      });
+    }
+    const existingBot = await InstanceModel.findOne({ userId, name: botName });
+    if (existingBot) {
+      return res.status(400).json({
+        success: false,
+        message: `Bot with name "${botName}" already exists for this user.`,
+      });
+    }
+    // Step 1: Build instanceName
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[-:.]/g, "")
+      .slice(0, 12);
+    const instanceName = `${botName}-${userId}-${timestamp}}`;
+    const instanceUniqueName = `hummingbot-${instanceName}`;
+
+    // Step 2: Get uniqueAccountName from DB
+    const account = await AccountModel.findOne({
+      userId,
+      accountName: credentials,
+    });
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        message: "Account not found",
+      });
+    }
+    const uniqueAccountName = account.uniqueAccountName;
+
+    const finalControllerConfigs = [];
+
+    try {
+      const strategies = await Promise.all(
+        controllerConfigs.map(async (configName) => {
+          const strategy = await StrategyModel.findOne({
+            userId,
+            strategyFileName: configName,
+          });
+
+          if (!strategy) {
+            throw new Error(
+              `Strategy config "${configName}" not found for user.`
+            );
+          }
+
+          return strategy.strategyFileUniqueName;
+        })
+      );
+
+      finalControllerConfigs.push(...strategies);
+    } catch (err) {
+      return res.status(404).json({
+        success: false,
+        message: err.message,
+      });
+    }
+
+    console.log(finalControllerConfigs);
+    // Step 4: Build script config
+    let scriptConfig = {
+      name: "instanceName",
+      content: {
+        script_file_name: "v2_with_controllers.py",
+        controllers_config: ["67cfff5facda61f6032c2783_samWatson_0.2"],
+        markets: {},
+        candles_config: [],
+        time_to_cash_out: null,
+      },
+    };
+
+    if (globalDrawdown)
+      scriptConfig.content.max_global_drawdown = globalDrawdown;
+
+    if (controllerDrawdown)
+      scriptConfig.content.max_controller_drawdown = controllerDrawdown;
+
+    if (rebalanceInterval) {
+      if (!assetToRebalance || !assetToRebalance.includes("USD")) {
+        return res.status(400).json({
+          success: false,
+          message: "Asset to rebalance must be USD-based",
+        });
+      }
+      scriptConfig.content.rebalance_interval = rebalanceInterval;
+      scriptConfig.content.asset_to_rebalance = assetToRebalance;
+    }
+
+    scriptConfig = JSON.stringify(scriptConfig, null, 2);
+
+    // Helper to post to Hummingbot API
+    const callHummingbotAPI = async (endpoint, data = null) => {
+      const url = `${process.env.HUMMING_BOT_API_BASE_URL}/${endpoint}`;
+      console.log("Calling Hummingbot API:", url);
+      return axios.post(url, data, {
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        auth: {
+          username: process.env.HUMMING_BOT_USERNAME,
+          password: process.env.HUMMING_BOT_PASSWORD,
+        },
+      });
+    };
+
+    // Step 5: Delete existing script configs
+    try {
+      await callHummingbotAPI("delete-all-script-configs");
+    } catch (error) {
+      const msg =
+        error.response?.data?.detail || "Failed to delete script configs.";
+      return res.status(error.response?.status || 500).json({
+        success: false,
+        message: msg,
+      });
+    }
+
+    // Step 6: Add new script config
+    try {
+      console.log(scriptConfig);
+      await callHummingbotAPI("add-script-config", scriptConfig);
+    } catch (error) {
+      console.log(error);
+      let msg = error.response?.data?.detail || "Failed to add script config.";
+      if (msg == "Not Found") {
+        msg = "Strategy file not found.";
+      }
+      return res.status(error.response?.status || 500).json({
+        success: false,
+        message: msg,
+      });
+    }
+
+    // Step 7: Launch bot
+    const deployConfig = {
+      instance_name: instanceName,
+      script: "v2_with_controllers.py",
+      script_config: `${instanceName}.yml`,
+      image: "hummingbot/hummingbot:latest",
+      credentials_profile: uniqueAccountName,
+    };
+
+    try {
+      await callHummingbotAPI("create-hummingbot-  b instance", deployConfig);
+    } catch (error) {
+      const msg =
+        error.response?.data?.detail || "Failed to launch bot instance.";
+      return res.status(error.response?.status || 500).json({
+        success: false,
+        message: msg,
+      });
+    }
+
+    // Step 8: Save to DB
+    await InstanceModel.create({
+      userId,
+      name: botName,
+      uniqueName: instanceUniqueName,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Bot launched successfully.",
+      botName: botName,
+    });
+  } catch (err) {
+    console.error("Launch bot error:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "Unexpected error while launching the bot.",
     });
   }
 };
