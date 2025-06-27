@@ -341,41 +341,35 @@ export const launchBot = async (req, res) => {
     }
     const uniqueAccountName = account.uniqueAccountName;
 
+    // Step 3: Fetch unique controller config names from DB
     const finalControllerConfigs = [];
 
-    try {
-      const strategies = await Promise.all(
-        controllerConfigs.map(async (configName) => {
-          const strategy = await StrategyModel.findOne({
-            userId,
-            strategyFileName: configName,
-          });
+    for (const configName of controllerConfigs) {
+      // Extract controllerName and version from string like "samWatson_0.2"
 
-          if (!strategy) {
-            throw new Error(
-              `Strategy config "${configName}" not found for user.`
-            );
-          }
-
-          return strategy.strategyFileUniqueName;
-        })
-      );
-
-      finalControllerConfigs.push(...strategies);
-    } catch (err) {
-      return res.status(404).json({
-        success: false,
-        message: err.message,
+      const strategy = await StrategyModel.findOne({
+        userId,
+        strategyFileName: configName,
       });
+
+      if (!strategy) {
+        return res.status(404).json({
+          success: false,
+          message: `Strategy config "${configName}" not found for user.`,
+        });
+      }
+
+      finalControllerConfigs.push(strategy.strategyFileUniqueName);
     }
 
+    // ✅ Don't stringify the array — send it as is
     console.log(finalControllerConfigs);
     // Step 4: Build script config
-    let scriptConfig = {
-      name: "instanceName",
+    const scriptConfig = {
+      name: instanceName,
       content: {
         script_file_name: "v2_with_controllers.py",
-        controllers_config: ["67cfff5facda61f6032c2783_samWatson_0.2"],
+        controllers_config: finalControllerConfigs,
         markets: {},
         candles_config: [],
         time_to_cash_out: null,
@@ -399,12 +393,9 @@ export const launchBot = async (req, res) => {
       scriptConfig.content.asset_to_rebalance = assetToRebalance;
     }
 
-    scriptConfig = JSON.stringify(scriptConfig, null, 2);
-
     // Helper to post to Hummingbot API
     const callHummingbotAPI = async (endpoint, data = null) => {
       const url = `${process.env.HUMMING_BOT_API_BASE_URL}/${endpoint}`;
-      console.log("Calling Hummingbot API:", url);
       return axios.post(url, data, {
         headers: {
           Accept: "application/json",
@@ -431,10 +422,8 @@ export const launchBot = async (req, res) => {
 
     // Step 6: Add new script config
     try {
-      console.log(scriptConfig);
       await callHummingbotAPI("add-script-config", scriptConfig);
     } catch (error) {
-      console.log(error);
       let msg = error.response?.data?.detail || "Failed to add script config.";
       if (msg == "Not Found") {
         msg = "Strategy file not found.";
@@ -455,7 +444,7 @@ export const launchBot = async (req, res) => {
     };
 
     try {
-      await callHummingbotAPI("create-hummingbot-  b instance", deployConfig);
+      await callHummingbotAPI("create-hummingbot-instance", deployConfig);
     } catch (error) {
       const msg =
         error.response?.data?.detail || "Failed to launch bot instance.";
