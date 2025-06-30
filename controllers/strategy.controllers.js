@@ -325,7 +325,7 @@ export const launchBot = async (req, res) => {
       .toISOString()
       .replace(/[-:.]/g, "")
       .slice(0, 12);
-    const instanceName = `${botName}-${userId}-${timestamp}}`;
+    const instanceName = `${botName}-${userId}-${timestamp}`;
     const instanceUniqueName = `hummingbot-${instanceName}`;
 
     // Step 2: Get uniqueAccountName from DB
@@ -359,7 +359,7 @@ export const launchBot = async (req, res) => {
         });
       }
 
-      finalControllerConfigs.push(strategy.strategyFileUniqueName);
+      finalControllerConfigs.push(`${strategy.strategyFileUniqueName}.yml`);
     }
 
     // ✅ Don't stringify the array — send it as is
@@ -411,6 +411,7 @@ export const launchBot = async (req, res) => {
     // Step 5: Delete existing script configs
     try {
       await callHummingbotAPI("delete-all-script-configs");
+      console.log("✅ Deleted all existing script configs.");
     } catch (error) {
       const msg =
         error.response?.data?.detail || "Failed to delete script configs.";
@@ -423,6 +424,7 @@ export const launchBot = async (req, res) => {
     // Step 6: Add new script config
     try {
       await callHummingbotAPI("add-script-config", scriptConfig);
+      console.log("✅ Added new script config:", scriptConfig);
     } catch (error) {
       let msg = error.response?.data?.detail || "Failed to add script config.";
       if (msg == "Not Found") {
@@ -445,6 +447,7 @@ export const launchBot = async (req, res) => {
 
     try {
       await callHummingbotAPI("create-hummingbot-instance", deployConfig);
+      console.log("✅ Bot instance launched:", deployConfig);
     } catch (error) {
       const msg =
         error.response?.data?.detail || "Failed to launch bot instance.";
