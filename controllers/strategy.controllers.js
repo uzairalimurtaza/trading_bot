@@ -15,9 +15,10 @@ export const addPMMSimpleConfig = async (req, res) => {
         message: "Missing name , version or content in request body",
       });
     }
+    let _name = name.toLowerCase();
     const userId = req.user.id;
-    const nameVersion = `${name}_${version}`;
-    const nameVersionUserId = `${userId}_${name}_${version}`;
+    const nameVersion = `${_name}_${version}`;
+    const nameVersionUserId = `${userId}_${_name}_${version}`;
 
     /*take_profit_order_type: limit(2), market(1);
       leverage (1 for spot trading)
@@ -300,7 +301,7 @@ export const launchBot = async (req, res) => {
       assetToRebalance,
     } = req.body;
 
-    const userId = req.user._id;
+    const userId = req.user.id;
 
     if (
       !botName ||
@@ -478,3 +479,199 @@ export const launchBot = async (req, res) => {
     });
   }
 };
+
+export const getUserBotStatus = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    console.log(userId);
+    // Step 1: Get all bots for this user
+    const bots = await InstanceModel.find({ userId: userId });
+    console.log(bots);
+    const results = [];
+
+    for (const bot of bots) {
+      const botName = bot.uniqueName;
+      const botStatusUrl = `${process.env.HUMMING_BOT_API_BASE_URL}/get-bot-status/${botName}`;
+
+      let status = "unknown";
+      let botData = null;
+
+      // Step 2: Call Hummingbot API to get status
+      try {
+        const response = await axios.get(botStatusUrl, {
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          auth: {
+            username: process.env.HUMMING_BOT_USERNAME,
+            password: process.env.HUMMING_BOT_PASSWORD,
+          },
+        });
+
+        status = response.data?.data?.status || "unknown";
+        botData = response.data?.data;
+      } catch (error) {
+        results.push({
+          botName: bot.name,
+          status: "error",
+          activeControllers: [],
+          error: error.response?.data?.detail || "Failed to fetch bot status.",
+        });
+        continue;
+      }
+
+      // Step 3: Match activeControllers with StrategyModel
+      const controllerNames = bot.activeControllers || [];
+
+      const strategyConfigs = await StrategyModel.find({
+        strategyFileName: { $in: controllerNames },
+        userId: bot.userId,
+      });
+
+      const activeControllers = controllerNames.map((controllerId) => {
+        const matched = strategyConfigs.find(
+          (s) => s.strategyFileName === controllerId
+        );
+
+        return {
+          name: controllerId,
+          controller: matched?.config?.controller_name || "N/A",
+          connector: matched?.config?.connector_name || "N/A",
+          trading_pair: matched?.config?.trading_pair || "N/A",
+          realized_pnl: 0,
+          unrealized_pnl: 0,
+          net_pnl: 0,
+          volume_traded: 0,
+          open_order_volume: 0,
+          imbalance: 0,
+        };
+      });
+
+      results.push({
+        botName: bot.name,
+        status,
+        activeControllers,
+        totalNetPNL: 0,
+        totalNetPNLPercentage: 0,
+        totalVolumeTraded: 0,
+        totalOpenOrderVolume: 0,
+        totalImbalance: 0,
+        totalUnrealizedPNL: 0,
+      });
+    }
+
+    return res.json({ success: true, data: results });
+  } catch (error) {
+    console.error("Error fetching bot statuses:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
+// export const getBotControllersSummary = async (req, res) => {
+//   const botName = req.params.botName;
+
+//   try {
+//     const controllerConfigs = (await getAllConfigsFromBot(botName)) || [];
+//     const botStatus = await getBotStatus(botName);
+
+//     if (!botStatus || botStatus.status === "error") {
+//       return res.status(500).json({
+//         status: "error",
+//         message: `Failed to fetch status for bot ${botName}`,
+//         errorLogs: botStatus?.data?.error_logs || [],
+//       });
+//     }
+
+//     const botData = botStatus.data;
+//     const isRunning = botData.status === "running";
+//     const performance = botData.performance || {};
+//     const errorLogs = botData.error_logs || [];
+//     const generalLogs = botData.general_logs || [];
+
+//     const activeControllers = [];
+//     const stoppedControllers = [];
+//     const errorControllers = [];
+
+//     let totalGlobalPNL = 0;
+//     let totalVolumeTraded = 0;
+//     let totalOpenOrderVolume = 0;
+//     let totalImbalance = 0;
+//     let totalUnrealizedPNL = 0;
+
+//     for (const controllerId in performance) {
+//       const entry = performance[controllerId];
+//       const controllerStatus = entry.status;
+
+//       if (controllerStatus === "error") {
+//         errorControllers.push({ id: controllerId, error: entry.error });
+//         continue;
+//       }
+
+//       const perf = entry.performance || {};
+//       const config = controllerConfigs.find((c) => c.id === controllerId) || {};
+
+//       const killSwitch = config.manual_kill_switch === true;
+//       const closeTypes = perf.close_type_counts || {};
+
+//       const controllerInfo = {
+//         id: controllerId,
+//         controller: config.controller_name || controllerId,
+//         connector: config.connector_name || "NaN",
+//         trading_pair: config.trading_pair || "NaN",
+//         realized_pnl_quote: parseFloat(perf.realized_pnl_quote || 0).toFixed(2),
+//         unrealized_pnl_quote: parseFloat(
+//           perf.unrealized_pnl_quote || 0
+//         ).toFixed(2),
+//         global_pnl_quote: parseFloat(perf.global_pnl_quote || 0).toFixed(2),
+//         volume_traded: parseFloat(perf.volume_traded || 0).toFixed(2),
+//         open_order_volume: parseFloat(perf.open_order_volume || 0).toFixed(2),
+//         imbalance: parseFloat(perf.inventory_imbalance || 0).toFixed(2),
+//         close_types: `TP: ${closeTypes["CloseType.TAKE_PROFIT"] || 0} | SL: ${
+//           closeTypes["CloseType.STOP_LOSS"] || 0
+//         } | TS: ${closeTypes["CloseType.TRAILING_STOP"] || 0} | TL: ${
+//           closeTypes["CloseType.TIME_LIMIT"] || 0
+//         } | ES: ${closeTypes["CloseType.EARLY_STOP"] || 0} | F: ${
+//           closeTypes["CloseType.FAILED"] || 0
+//         }`,
+//       };
+
+//       if (killSwitch) stoppedControllers.push(controllerInfo);
+//       else activeControllers.push(controllerInfo);
+
+//       totalGlobalPNL += parseFloat(perf.global_pnl_quote || 0);
+//       totalVolumeTraded += parseFloat(perf.volume_traded || 0);
+//       totalOpenOrderVolume += parseFloat(perf.open_order_volume || 0);
+//       totalImbalance += parseFloat(perf.inventory_imbalance || 0);
+//       totalUnrealizedPNL += parseFloat(perf.unrealized_pnl_quote || 0);
+//     }
+
+//     const totalGlobalPNLPercentage =
+//       totalVolumeTraded > 0 ? totalGlobalPNL / totalVolumeTraded : 0;
+
+//     return res.json({
+//       status: isRunning ? "running" : "stopped",
+//       activeControllers,
+//       stoppedControllers,
+//       errorControllers,
+//       totalGlobalPNL: totalGlobalPNL.toFixed(3),
+//       totalGlobalPNLPercentage: (totalGlobalPNLPercentage * 100).toFixed(2),
+//       totalVolumeTraded: totalVolumeTraded.toFixed(2),
+//       totalOpenOrderVolume: totalOpenOrderVolume.toFixed(2),
+//       totalImbalance: totalImbalance.toFixed(2),
+//       totalUnrealizedPNL: totalUnrealizedPNL.toFixed(2),
+//       errorLogs,
+//       generalLogs,
+//     });
+//   } catch (err) {
+//     console.error("Error in getBotControllersSummary:", err.message);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch bot controller summary.",
+//     });
+//   }
+// };
