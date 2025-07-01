@@ -462,6 +462,7 @@ export const launchBot = async (req, res) => {
       userId,
       name: botName,
       uniqueName: instanceUniqueName,
+      activeControllers: controllerConfigs,
     });
 
     return res.status(200).json({

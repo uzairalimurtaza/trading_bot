@@ -16,6 +16,14 @@ const instanceSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    activeControllers: {
+      type: [String],
+      default: [],
+    },
+    stoppedControllers: {
+      type: [String],
+      default: [],
+    },
   },
   { timestamps: true }
 );
