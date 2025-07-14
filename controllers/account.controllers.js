@@ -53,9 +53,9 @@ export const deleteAccount = async (req, res) => {
   try {
     const userId = req.user.id;
     const accountName = req.params.accountName;
-
+    console.log("accountName : ", accountName);
     const account = await AccountModel.findOne({ userId, accountName });
-
+    console.log("account : ", account);
     if (!account) {
       return res.status(404).json({
         success: false,

@@ -479,12 +479,15 @@ export const launchBot = async (req, res) => {
     });
   }
 };
+//  Active controllers  → " Active Controllers" table.
+//  Stopped controllers → " Stopped Controllers" table.
+//  Error controllers   → " Controllers with errors" table.
 
 export const getUserBotStatus = async (req, res) => {
   try {
     const userId = req.user.id;
     console.log(userId);
-    // Step 1: Get all bots for this user
+   
     const bots = await InstanceModel.find({ userId: userId });
     console.log(bots);
     const results = [];
@@ -493,10 +496,9 @@ export const getUserBotStatus = async (req, res) => {
       const botName = bot.uniqueName;
       const botStatusUrl = `${process.env.HUMMING_BOT_API_BASE_URL}/get-bot-status/${botName}`;
 
-      let status = "unknown";
+      let status;
       let botData = null;
 
-      // Step 2: Call Hummingbot API to get status
       try {
         const response = await axios.get(botStatusUrl, {
           headers: {
@@ -509,55 +511,103 @@ export const getUserBotStatus = async (req, res) => {
           },
         });
 
-        status = response.data?.data?.status || "unknown";
-        botData = response.data?.data;
+        botData = response.data?.data || {};
+        status = botData.status || "Error";
       } catch (error) {
+        const errMsg =
+          error.response?.data?.detail ||
+          "An error occurred while fetching bot status";
         results.push({
           botName: bot.name,
-          status: "error",
+          status:
+            error.response?.data?.detail === "Bot not found"
+              ? "Stopped"
+              : "Error",
           activeControllers: [],
-          error: error.response?.data?.detail || "Failed to fetch bot status.",
+          error: errMsg,
         });
         continue;
       }
+      const errorLogs = botData?.error_logs || [];
+      const generalLogs = botData?.general_logs || [];
 
-      // Step 3: Match activeControllers with StrategyModel
-      const controllerNames = bot.activeControllers || [];
-
+      const latestErrorLogs = errorLogs.slice(-50); // last 50 logs
+      const latestGeneralLogs = generalLogs.slice(-50); // last 50 logs
+      const performance = botData.performance || {};
+      console.log(performance);
+      const controllerNames = Object.keys(performance);
+      console.log("Controller Names: ", controllerNames);
       const strategyConfigs = await StrategyModel.find({
-        strategyFileName: { $in: controllerNames },
+        strategyFileUniqueName: { $in: controllerNames },
         userId: bot.userId,
       });
+      console.log("Strategy Configs: ", strategyConfigs);
+      const activeControllers = [];
+      let totalNetPNL = 0;
+      let totalVolumeTraded = 0;
+      let totalOpenOrderVolume = 0;
+      let totalImbalance = 0;
+      let totalUnrealizedPNL = 0;
+      for (const controllerId of controllerNames) {
+        console.log(controllerId);
+        const perf = performance[controllerId];
+        console.log("Performance: ", perf);
+        if (perf.status === "error")
+          // add this controller to error controllers
+          continue;
 
-      const activeControllers = controllerNames.map((controllerId) => {
-        const matched = strategyConfigs.find(
-          (s) => s.strategyFileName === controllerId
+        const matchedStrategy = strategyConfigs.find(
+          (s) => s.strategyFileUniqueName === controllerId
         );
 
-        return {
-          name: controllerId,
-          controller: matched?.config?.controller_name || "N/A",
-          connector: matched?.config?.connector_name || "N/A",
-          trading_pair: matched?.config?.trading_pair || "N/A",
-          realized_pnl: 0,
-          unrealized_pnl: 0,
-          net_pnl: 0,
-          volume_traded: 0,
-          open_order_volume: 0,
-          imbalance: 0,
-        };
-      });
+        const config = matchedStrategy?.config || {};
+        const fileName = matchedStrategy?.strategyFileName || "N/A";
+
+        const p = perf.performance || {};
+        const realized_pnl = p.realized_pnl_quote || 0;
+        const unrealized_pnl = p.unrealized_pnl_quote || 0;
+        const net_pnl = p.global_pnl_quote || 0;
+        const volume_traded = p.volume_traded || 0;
+        const open_order_volume = p.open_order_volume || 0;
+        const imbalance = p.inventory_imbalance || 0;
+
+        totalNetPNL += net_pnl;
+        totalVolumeTraded += volume_traded;
+        totalOpenOrderVolume += open_order_volume;
+        totalImbalance += imbalance;
+        totalUnrealizedPNL += unrealized_pnl;
+
+        activeControllers.push({
+          name: fileName,
+          controller: config.controller_name || "N/A",
+          connector: config.connector_name || "N/A",
+          trading_pair: config.trading_pair || "N/A",
+          realized_pnl: Number(realized_pnl.toFixed(2)),
+          unrealized_pnl: Number(unrealized_pnl.toFixed(2)),
+          net_pnl: Number(net_pnl.toFixed(2)),
+          volume_traded: Number(volume_traded.toFixed(2)),
+          open_order_volume: Number(open_order_volume.toFixed(2)),
+          imbalance: Number(imbalance.toFixed(2)),
+          close_types: formatCloseTypes(p.close_type_counts || {}),
+        });
+      }
+      const totalNetPNLPercentage =
+        totalVolumeTraded > 0
+          ? Number(((totalNetPNL / totalVolumeTraded) * 100).toFixed(2))
+          : 0;
 
       results.push({
         botName: bot.name,
         status,
         activeControllers,
-        totalNetPNL: 0,
-        totalNetPNLPercentage: 0,
-        totalVolumeTraded: 0,
-        totalOpenOrderVolume: 0,
-        totalImbalance: 0,
-        totalUnrealizedPNL: 0,
+        totalNetPNL: Number(totalNetPNL.toFixed(2)),
+        totalNetPNLPercentage,
+        totalVolumeTraded: Number(totalVolumeTraded.toFixed(2)),
+        totalOpenOrderVolume: Number(totalOpenOrderVolume.toFixed(2)),
+        totalImbalance: Number(totalImbalance.toFixed(2)),
+        totalUnrealizedPNL: Number(totalUnrealizedPNL.toFixed(2)),
+        errorLogs: latestErrorLogs,
+        generalLogs: latestGeneralLogs,
       });
     }
 
@@ -572,106 +622,13 @@ export const getUserBotStatus = async (req, res) => {
   }
 };
 
-// export const getBotControllersSummary = async (req, res) => {
-//   const botName = req.params.botName;
+function formatCloseTypes(closeTypes) {
+  const tp = closeTypes["CloseType.TAKE_PROFIT"] || 0;
+  const sl = closeTypes["CloseType.STOP_LOSS"] || 0;
+  const ts = closeTypes["CloseType.TRAILING_STOP"] || 0;
+  const tl = closeTypes["CloseType.TIME_LIMIT"] || 0;
+  const es = closeTypes["CloseType.EARLY_STOP"] || 0;
+  const f = closeTypes["CloseType.FAILED"] || 0;
 
-//   try {
-//     const controllerConfigs = (await getAllConfigsFromBot(botName)) || [];
-//     const botStatus = await getBotStatus(botName);
-
-//     if (!botStatus || botStatus.status === "error") {
-//       return res.status(500).json({
-//         status: "error",
-//         message: `Failed to fetch status for bot ${botName}`,
-//         errorLogs: botStatus?.data?.error_logs || [],
-//       });
-//     }
-
-//     const botData = botStatus.data;
-//     const isRunning = botData.status === "running";
-//     const performance = botData.performance || {};
-//     const errorLogs = botData.error_logs || [];
-//     const generalLogs = botData.general_logs || [];
-
-//     const activeControllers = [];
-//     const stoppedControllers = [];
-//     const errorControllers = [];
-
-//     let totalGlobalPNL = 0;
-//     let totalVolumeTraded = 0;
-//     let totalOpenOrderVolume = 0;
-//     let totalImbalance = 0;
-//     let totalUnrealizedPNL = 0;
-
-//     for (const controllerId in performance) {
-//       const entry = performance[controllerId];
-//       const controllerStatus = entry.status;
-
-//       if (controllerStatus === "error") {
-//         errorControllers.push({ id: controllerId, error: entry.error });
-//         continue;
-//       }
-
-//       const perf = entry.performance || {};
-//       const config = controllerConfigs.find((c) => c.id === controllerId) || {};
-
-//       const killSwitch = config.manual_kill_switch === true;
-//       const closeTypes = perf.close_type_counts || {};
-
-//       const controllerInfo = {
-//         id: controllerId,
-//         controller: config.controller_name || controllerId,
-//         connector: config.connector_name || "NaN",
-//         trading_pair: config.trading_pair || "NaN",
-//         realized_pnl_quote: parseFloat(perf.realized_pnl_quote || 0).toFixed(2),
-//         unrealized_pnl_quote: parseFloat(
-//           perf.unrealized_pnl_quote || 0
-//         ).toFixed(2),
-//         global_pnl_quote: parseFloat(perf.global_pnl_quote || 0).toFixed(2),
-//         volume_traded: parseFloat(perf.volume_traded || 0).toFixed(2),
-//         open_order_volume: parseFloat(perf.open_order_volume || 0).toFixed(2),
-//         imbalance: parseFloat(perf.inventory_imbalance || 0).toFixed(2),
-//         close_types: `TP: ${closeTypes["CloseType.TAKE_PROFIT"] || 0} | SL: ${
-//           closeTypes["CloseType.STOP_LOSS"] || 0
-//         } | TS: ${closeTypes["CloseType.TRAILING_STOP"] || 0} | TL: ${
-//           closeTypes["CloseType.TIME_LIMIT"] || 0
-//         } | ES: ${closeTypes["CloseType.EARLY_STOP"] || 0} | F: ${
-//           closeTypes["CloseType.FAILED"] || 0
-//         }`,
-//       };
-
-//       if (killSwitch) stoppedControllers.push(controllerInfo);
-//       else activeControllers.push(controllerInfo);
-
-//       totalGlobalPNL += parseFloat(perf.global_pnl_quote || 0);
-//       totalVolumeTraded += parseFloat(perf.volume_traded || 0);
-//       totalOpenOrderVolume += parseFloat(perf.open_order_volume || 0);
-//       totalImbalance += parseFloat(perf.inventory_imbalance || 0);
-//       totalUnrealizedPNL += parseFloat(perf.unrealized_pnl_quote || 0);
-//     }
-
-//     const totalGlobalPNLPercentage =
-//       totalVolumeTraded > 0 ? totalGlobalPNL / totalVolumeTraded : 0;
-
-//     return res.json({
-//       status: isRunning ? "running" : "stopped",
-//       activeControllers,
-//       stoppedControllers,
-//       errorControllers,
-//       totalGlobalPNL: totalGlobalPNL.toFixed(3),
-//       totalGlobalPNLPercentage: (totalGlobalPNLPercentage * 100).toFixed(2),
-//       totalVolumeTraded: totalVolumeTraded.toFixed(2),
-//       totalOpenOrderVolume: totalOpenOrderVolume.toFixed(2),
-//       totalImbalance: totalImbalance.toFixed(2),
-//       totalUnrealizedPNL: totalUnrealizedPNL.toFixed(2),
-//       errorLogs,
-//       generalLogs,
-//     });
-//   } catch (err) {
-//     console.error("Error in getBotControllersSummary:", err.message);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to fetch bot controller summary.",
-//     });
-//   }
-// };
+  return `TP: ${tp} | SL: ${sl} | TS: ${ts} | TL: ${tl} | ES: ${es} | F: ${f}`;
+}
