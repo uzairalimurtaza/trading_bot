@@ -670,7 +670,7 @@ export const stopActiveStrategyFile = async (req, res) => {
     const payload = { manual_kill_switch: true };
 
     try {
-      await axios.put(hummingUrl, payload, {
+      await axios.post(hummingUrl, payload, {
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
