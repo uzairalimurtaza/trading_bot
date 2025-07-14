@@ -479,6 +479,17 @@ export const launchBot = async (req, res) => {
     });
   }
 };
+
+function formatCloseTypes(closeTypes) {
+  const tp = closeTypes["CloseType.TAKE_PROFIT"] || 0;
+  const sl = closeTypes["CloseType.STOP_LOSS"] || 0;
+  const ts = closeTypes["CloseType.TRAILING_STOP"] || 0;
+  const tl = closeTypes["CloseType.TIME_LIMIT"] || 0;
+  const es = closeTypes["CloseType.EARLY_STOP"] || 0;
+  const f = closeTypes["CloseType.FAILED"] || 0;
+
+  return `TP: ${tp} | SL: ${sl} | TS: ${ts} | TL: ${tl} | ES: ${es} | F: ${f}`;
+}
 //  Active controllers  → " Active Controllers" table.
 //  Stopped controllers → " Stopped Controllers" table.
 //  Error controllers   → " Controllers with errors" table.
@@ -487,7 +498,7 @@ export const getUserBotStatus = async (req, res) => {
   try {
     const userId = req.user.id;
     console.log(userId);
-   
+
     const bots = await InstanceModel.find({ userId: userId });
     console.log(bots);
     const results = [];
@@ -524,6 +535,7 @@ export const getUserBotStatus = async (req, res) => {
               ? "Stopped"
               : "Error",
           activeControllers: [],
+          stoppedControllers: [],
           error: errMsg,
         });
         continue;
@@ -543,6 +555,7 @@ export const getUserBotStatus = async (req, res) => {
       });
       console.log("Strategy Configs: ", strategyConfigs);
       const activeControllers = [];
+      const stoppedControllers = [];
       let totalNetPNL = 0;
       let totalVolumeTraded = 0;
       let totalOpenOrderVolume = 0;
@@ -571,13 +584,7 @@ export const getUserBotStatus = async (req, res) => {
         const open_order_volume = p.open_order_volume || 0;
         const imbalance = p.inventory_imbalance || 0;
 
-        totalNetPNL += net_pnl;
-        totalVolumeTraded += volume_traded;
-        totalOpenOrderVolume += open_order_volume;
-        totalImbalance += imbalance;
-        totalUnrealizedPNL += unrealized_pnl;
-
-        activeControllers.push({
+        const controllerData = {
           name: fileName,
           controller: config.controller_name || "N/A",
           connector: config.connector_name || "N/A",
@@ -589,7 +596,18 @@ export const getUserBotStatus = async (req, res) => {
           open_order_volume: Number(open_order_volume.toFixed(2)),
           imbalance: Number(imbalance.toFixed(2)),
           close_types: formatCloseTypes(p.close_type_counts || {}),
-        });
+        };
+        if (bot.stoppedControllers.includes(fileName)) {
+          stoppedControllers.push(controllerData);
+        } else {
+          activeControllers.push(controllerData);
+        }
+
+        totalNetPNL += net_pnl;
+        totalVolumeTraded += volume_traded;
+        totalOpenOrderVolume += open_order_volume;
+        totalImbalance += imbalance;
+        totalUnrealizedPNL += unrealized_pnl;
       }
       const totalNetPNLPercentage =
         totalVolumeTraded > 0
@@ -600,6 +618,7 @@ export const getUserBotStatus = async (req, res) => {
         botName: bot.name,
         status,
         activeControllers,
+        stoppedControllers,
         totalNetPNL: Number(totalNetPNL.toFixed(2)),
         totalNetPNLPercentage,
         totalVolumeTraded: Number(totalVolumeTraded.toFixed(2)),
@@ -622,13 +641,77 @@ export const getUserBotStatus = async (req, res) => {
   }
 };
 
-function formatCloseTypes(closeTypes) {
-  const tp = closeTypes["CloseType.TAKE_PROFIT"] || 0;
-  const sl = closeTypes["CloseType.STOP_LOSS"] || 0;
-  const ts = closeTypes["CloseType.TRAILING_STOP"] || 0;
-  const tl = closeTypes["CloseType.TIME_LIMIT"] || 0;
-  const es = closeTypes["CloseType.EARLY_STOP"] || 0;
-  const f = closeTypes["CloseType.FAILED"] || 0;
+export const stopActiveStrategyFile = async (req, res) => {
+  const { botName, fileName } = req.body;
+  try {
+    const userId = req.user.id;
+    console.log(userId);
 
-  return `TP: ${tp} | SL: ${sl} | TS: ${ts} | TL: ${tl} | ES: ${es} | F: ${f}`;
-}
+    const bot = await InstanceModel.findOne({ userId: userId, name: botName });
+    if (!bot) {
+      return res.status(404).json({
+        success: false,
+        message: `Bot "${botName}" not found for user.`,
+      });
+    }
+    const strategyConfig = await StrategyModel.findOne({
+      userId: userId,
+      strategyFileName: fileName,
+    });
+    if (!strategyConfig) {
+      return res.status(404).json({
+        success: false,
+        message: `Strategy file "${fileName}" not found.`,
+      });
+    }
+    const botUniqueName = bot.uniqueName;
+    const strategyFileUniqueName = strategyConfig.strategyFileUniqueName;
+    const hummingUrl = `${process.env.HUMMING_BOT_API_BASE_URL}/update-controller-config/bot/${botUniqueName}/${strategyFileUniqueName}`;
+    const payload = { manual_kill_switch: true };
+
+    try {
+      await axios.put(hummingUrl, payload, {
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        auth: {
+          username: process.env.HUMMING_BOT_USERNAME,
+          password: process.env.HUMMING_BOT_PASSWORD,
+        },
+      });
+    } catch (error) {
+      const errMsg =
+        error.response?.data?.detail ||
+        "Failed to stop active controller config.";
+      const status = error.response?.status || 500;
+      console.error("Hummingbot stopping strategy file API error:", errMsg);
+      return res.status(status).json({
+        success: false,
+        message: errMsg,
+      });
+    }
+
+    bot.activeControllers = bot.activeControllers.filter(
+      (controller) => controller !== fileName
+    );
+    if (!bot.stoppedControllers.includes(fileName)) {
+      bot.stoppedControllers.push(fileName);
+    }
+
+    await bot.save();
+    return res.status(200).json({
+      success: true,
+      message: "Strategy file stopped successfully.",
+    });
+  } catch (error) {
+    console.error(
+      "Unexpected server error while stopping strategy file :",
+      err.message
+    );
+    return res.status(500).json({
+      success: false,
+      message: "Unexpected error while stopping strategy file.",
+    });
+  }
+};
